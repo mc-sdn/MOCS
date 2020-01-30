@@ -1,6 +1,6 @@
 # MOCS
 
-A prototype implementation of a highly expressive, optimised SDN model in UPPAAL.
+A prototype implementation of a highly expressive, optimised Software-Defined Network model in UPPAAL.
 
 ## Getting Started
 
