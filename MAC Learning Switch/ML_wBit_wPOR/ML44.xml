@@ -1,0 +1,2073 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE nta PUBLIC '-//Uppaal Team//DTD Flat System 1.1//EN' 'http://www.it.uu.se/research/group/darts/uppaal/flat-1_2.dtd'>
+<nta>
+	<declaration>/* Manual bitfield manipulation - UPPAAL has not bitfield construct of its own
+ */
+
+//const int Bound = 1;
+//const int multiplicity =  1;
+const int switches     =  4;
+const int clients      =  4;
+const int ports        =  3;  /* the max number of ports a switch in the topology in question might have */
+const int priorities   =  1;
+
+const int flood = ports+1;
+
+/*client_pairs_communicating() * ports * (ports-1) ;
+ *
+ * for all nx2 topologies   rules
+ * for all 5,6x3 topologies 7 rules
+ *         3x3            6
+ * for 9x2   rules
+ */
+const int rules_no     =  14;  
+
+/*client_pairs_communicating() * ports * (ports-1) * |SW| * 2^|SW| minus those that if src != client_of_switch(p.sw), (src not client of the switch) in-port can’t be the client port 
+ *
+ * for 3x2    packets
+ * for 4x2    packets
+ * for 5x2    packets
+ * for 6x2    packets
+ * for 7x2    packets
+ * for 3x3  9 packets
+ * for 4x3    packets
+ * for 5x3 15 packets
+ * for 6x3 18 packets
+ * for 9x2    packets
+ */
+const int packets_no   =  16;     
+
+//const int timed_rules  =  2;
+
+/* if topology  = 2.....these are the nX2 topologies with only 2 clients 6000 and 6001
+ * if topology  = 3.....these are the nX3 topologies with only 3 clients 6000, 6001 and 6002 (6001 is connected with the middle-1 switch
+*/
+const int topology  = 44;
+
+
+/*   The default integer range in UPPAAL is small (±2^16). 
+ *   However, integer ranges up to 32 bits are supported, so we define custom ranges 
+ */
+
+typedef int [-(1 &lt;&lt;31),(1&lt;&lt;31)-1] int32_t ; // a signed 32 bit integer data type (−2,147,483,648 to 2,147,483,647)
+typedef int [0,(1&lt;&lt;32)-1] uint32_t ; // an unsigned 32 bit integer data type (0 to 4,294,967,295)
+
+/*
+ *  Defining bit flags : a symbolic constant to give a meaningful name to each bit used 
+ *                       (left-shift operator to shift a bit into the proper location).
+ */
+//const	int32_t	bit0	=	1	&lt;&lt;	0	;  // 0000 0000 0000 0000 0000 0000 0000 0001 (2^0)
+//const	int32_t	bit1	=	1	&lt;&lt;	1	;  // 0000 0000 0000 0000 0000 0000 0000 0010 (2
+//const	int32_t	bit2	=	1	&lt;&lt;	2	;  // 0000 0000 0000 0000 0000 0000 0000 0100
+//const	int32_t	bit3	=	1	&lt;&lt;	3	;  // 0000 0000 0000 0000 0000 0000 0000 1000
+//const	int32_t	bit4	=	1	&lt;&lt;	4	;  // 0000 0000 0000 0000 0000 0000 0001 0000
+//const	int32_t	bit5	=	1	&lt;&lt;	5	;  // 0000 0000 0000 0000 0000 0000 0010 0000
+//const	int32_t	bit6	=	1	&lt;&lt;	6	;  // 0000 0000 0000 0000 0000 0000 0100 0000
+//const	int32_t	bit7	=	1	&lt;&lt;	7	;  // 0000 0000 0000 0000 0000 0000 1000 0000
+//const	int32_t	bit8	=	1	&lt;&lt;	8	;
+//const	int32_t	bit9	=	1	&lt;&lt;	9	;
+//const	int32_t	bit10	=	1	&lt;&lt;	10	;
+//const	int32_t	bit11	=	1	&lt;&lt;	11	;
+//const	int32_t	bit12	=	1	&lt;&lt;	12	;
+//const	int32_t	bit13	=	1	&lt;&lt;	13	;
+//const	int32_t	bit14	=	1	&lt;&lt;	14	;
+//const	int32_t	bit15	=	1	&lt;&lt;	15	;
+//const	int32_t	bit16	=	1	&lt;&lt;	16	;
+//const	int32_t	bit17	=	1	&lt;&lt;	17	;
+//const	int32_t	bit18	=	1	&lt;&lt;	18	;
+//const	int32_t	bit19	=	1	&lt;&lt;	19	;
+//const	int32_t	bit20	=	1	&lt;&lt;	20	;
+//const	int32_t	bit21	=	1	&lt;&lt;	21	;
+//const	int32_t	bit22	=	1	&lt;&lt;	22	;
+//const	int32_t	bit23	=	1	&lt;&lt;	23	;
+//const	int32_t	bit24	=	1	&lt;&lt;	24	;
+//const	int32_t	bit25	=	1	&lt;&lt;	25	;
+//const	int32_t	bit26	=	1	&lt;&lt;	26	;
+//const	int32_t	bit27	=	1	&lt;&lt;	27	;
+//const	int32_t	bit28	=	1	&lt;&lt;	28	;
+//const	int32_t	bit29	=	1	&lt;&lt;	29	;
+//const	int32_t	bit30	=	1	&lt;&lt;	30	;
+//const	int32_t	bit31	=	1	&lt;&lt;	31	;
+
+
+
+// to turn bit 4 ON  of variable v we use bitwise OR:   v |= bit4;    or    v |= 1 &lt;&lt; 4;
+// to turn bit 4 OFF of variable v we use bitwise AND with an inverse bit pattern:   v = v &amp;(bit4 ^ -1);
+// to toggle a bit state we use bitwise XOR:
+//                                            v ^= bit4;          --flip bit4 from on to off, or vice versa
+//                                            v ^= (bit4 | bit5); --flip bit4 and 5 at the same time  
+// to toggle all bits:    v ^= -1             
+// Determining if a bit is on or off:  
+//                                    if (v &amp; bit4) then "v has bit4 set"
+//                                    if (!(v &amp; bit4)) then "v does not have bit4 set"
+
+
+
+
+/* Function to get no of bits in binary 
+   representation of positive integer */
+int countBits(int[0,(1&lt;&lt;15)-1] n){
+  int bits = 0; 
+   while (n) 
+   { 
+        bits++; 
+        n &gt;&gt;= 1; 
+    } 
+    return bits; 
+}
+
+//const int  pk = 0;
+//const int  ru = 1;
+//const int  mac = 2;
+
+//const int no_fields     = 12;
+/* 
+ * Packet Match fields
+ */
+const int _src_           = 2; 
+const int _dest_          = 3; 
+const int _reached_       = 4; 
+const int _in_port_       = 5; 
+const int _out_port_      = 6; 
+const int _prio_          = 7; 
+const int _install_       = 8; 
+/* 
+ * Location
+ */
+const int _pb_            = 9;
+const int _pIb_           = 10;
+const int _pOb_           = 11;
+const int _cb_            = 12;
+const int _ft_            = 13;
+
+/*
+bool fields(int field, int[0,2] data_type){
+
+  bool fi[64][3];
+
+  fi[src][pk] = 1;
+  fi[src][ru] = 1;
+  fi[dest][pk] = 1;
+  fi[dest][ru] = 1;
+  fi[reached][pk] = 1;
+  fi[in_port][pk] = 1;
+  fi[in_port][ru] = 1;
+  fi[in_port][mac] = 1;
+
+// fixed fields
+  fi[out_port][pk] = 1;
+  fi[out_port][ru] = 1;
+  fi[prio][ru] = 1;
+  fi[install][ru] = 1;
+
+  fi[pb][pk] = 1;
+  fi[pIb][pk] = 1;
+  fi[pOb][pk] = 1;
+  fi[cb][ru] = 1;
+  fi[ft][ru] = 1;
+
+        return fi[field][data_type];
+}
+*/
+
+
+int bitfield_length(int field){
+
+  int bits;
+
+        if(field == _src_)         {bits = 3;}
+  else  if(field == _dest_)        {bits = 3;}
+  else  if(field == _reached_)     {bits = switches;} // should be = switches because it's not just a switch_id but this bitfield holds many switches
+  else  if(field == _in_port_)     {bits = 2;}
+  else  if(field == _out_port_)    {bits = 3;}
+  else  if(field == _prio_)        {bits = 1;}
+  else  if(field == _install_)     {bits = 1;}
+  else  if(field == _pb_)          {bits = switches;}
+  else  if(field == _pIb_)         {bits = switches;}
+  else  if(field == _pOb_)         {bits = switches;}
+  else  if(field == _cb_)          {bits = switches;}
+  else  if(field == _ft_)          {bits = switches;}
+
+    return bits;
+}
+
+const int bitfield_length_in_port  = 2;
+const int from_bit_prio     =  11;
+const int from_bit_install  =  12;
+
+/*
+const int bitfield_length_src      = 2;
+const int bitfield_length_dest     = 2;
+const int bitfield_length_reached  = switches; // should be = switches because it's not just a switch_id but this bitfield holds many switches
+const int bitfield_length_in_port  = 2;
+const int bitfield_length_out_port = 2;
+const int bitfield_length_prio     = 1;
+const int bitfield_length_install  = 1;
+const int bitfield_length_pb       = switches;
+const int bitfield_length_pIb      = switches;
+const int bitfield_length_pOb      = switches;
+const int bitfield_length_cb       = switches;
+const int bitfield_length_ft       = switches;
+
+const int from_bit_src      =  0;
+const int from_bit_dest     =  2;
+const int from_bit_in_port  =  4;
+const int from_bit_out_port =  6;
+const int from_bit_reached  =  8;
+const int from_bit_pb       = 14;
+const int from_bit_pIb      = 20;
+const int from_bit_pOb      = 26;
+
+const int from_bit_prio     =  8;
+const int from_bit_install  =  9;
+const int from_bit_cb       = 10;
+const int from_bit_ft       = 16;
+*/
+
+int from_bit(int field)
+{
+  int from ;
+
+         if(field == _src_)        {from =  0;}
+   else  if(field == _dest_)       {from =  3;}
+   else  if(field == _in_port_)    {from =  6;}
+   else  if(field == _out_port_)   {from =  8;}
+   else  if(field == _reached_)    {from =  11;}
+   else  if(field == _pb_)         {from = 15;}
+   else  if(field == _pIb_)        {from = 19;}
+   else  if(field == _pOb_)        {from = 23;}
+   else  if(field == _prio_)       {from =  11;}
+   else  if(field == _install_)    {from =  12;}
+   else  if(field == _cb_)         {from = 13;}
+   else  if(field == _ft_)         {from = 17;}
+
+    return from;
+}
+
+
+
+const int32_t mask_src = ((1 &lt;&lt; bitfield_length(_src_)) -1 ) &lt;&lt; from_bit(_src_);
+const int32_t mask_dest = ((1 &lt;&lt; bitfield_length(_dest_)) -1 ) &lt;&lt; from_bit(_dest_);
+const int32_t mask_in_port = ((1 &lt;&lt; bitfield_length(_in_port_)) -1 ) &lt;&lt; from_bit(_in_port_);
+const int32_t mask_out_port = ((1 &lt;&lt; bitfield_length(_out_port_)) -1 ) &lt;&lt; from_bit(_out_port_);
+const int32_t mask_reached = ((1 &lt;&lt; bitfield_length(_reached_)) -1 ) &lt;&lt; from_bit(_reached_);
+const int32_t mask_prio = ((1 &lt;&lt; bitfield_length(_prio_)) -1 ) &lt;&lt; from_bit(_prio_);
+const int32_t mask_install = ((1 &lt;&lt; bitfield_length(_install_)) -1 ) &lt;&lt; from_bit(_install_);
+const int32_t mask_pb = ((1 &lt;&lt; bitfield_length(_pb_)) -1 ) &lt;&lt; from_bit(_pb_);
+const int32_t mask_pIb = ((1 &lt;&lt; bitfield_length(_pIb_)) -1 ) &lt;&lt; from_bit(_pIb_);
+const int32_t mask_pOb = ((1 &lt;&lt; bitfield_length(_pOb_)) -1 ) &lt;&lt; from_bit(_pOb_);
+const int32_t mask_cb = ((1 &lt;&lt; bitfield_length(_cb_)) -1 ) &lt;&lt; from_bit(_cb_);
+const int32_t mask_ft = ((1 &lt;&lt; bitfield_length(_ft_)) -1 ) &lt;&lt; from_bit(_ft_);
+
+const int32_t mask_same_pkt = mask_src | mask_dest |  mask_in_port |  mask_reached;//  for 6x3  16191;          //b11111100111111
+const int32_t mask_same_pkt_alpha = mask_src | mask_dest |  mask_in_port ;
+const int32_t mask_same_rule = mask_src | mask_dest |  mask_in_port |  mask_out_port | mask_prio | mask_install;   
+
+
+
+//const int32_t mask_src = 3;          // b00000000000000000000000000000011  - 2^from + 2^to
+//const int32_t mask_dest = 12;        // b00000000000000000000000000001100
+//const int32_t mask_in_port = 48;     // b00000000000000000000000000110000
+//const int32_t mask_out_port = -64;   // b00000000000000000000000011000000
+//const int32_t mask_reached = 16128;  // b00000000000000000011111100000000
+//const int32_t mask_prio = 256;       // b00000000000000000000000100000000
+//const int32_t mask_install = 512;    // b00000000000000000000001000000000
+//const int32_t mask_pb = 1032192;     // b00000000000011111100000000000000
+//const int32_t mask_pIb = 66060288;   // b00000011111100000000000000000000
+//const int32_t mask_pOb = -67108864;  // b11111100000000000000000000000000
+//const int32_t mask_cb = -1024;       // b00000000000000001111110000000000
+//const int32_t mask_ft = 4128768;     // b00000000001111110000000000000000
+
+
+
+
+const int32_t init_rule = (1 &lt;&lt; from_bit_prio) | (1 &lt;&lt; from_bit_install);
+
+
+
+
+/*
+int from_bit(int field, int[0,2] data_type)
+{
+  int f = 2;
+  int from ;
+
+        while(f != field and from &lt; 64){ 
+            if(fields(f, data_type) ){
+                from +=  bitfield_length(f);
+            }
+            f++;
+        }
+    return from;
+}
+*/
+
+//int packet_size = from_bit(pOb,pk) + bitfield_length(pOb);
+//int rule_size = from_bit(ft,ru) + bitfield_length(ft);
+//int mac_siz = 
+
+
+
+/* 
+ *
+ *****************************************************************************************************************
+ *
+ *    SWITCHES
+ *
+ *****************************************************************************************************************
+ * 
+ */
+const bool oo_pq = 1; // this is the infinite abstraction
+const bool oo_pIOq = 0; // this is the infinite abstraction
+const bool oo_cq = 0; // this is the infinite abstraction
+const bool fwd_optimisation = 1;
+const bool ctrl_optimisation = 1;
+const bool stateful_controller = 0;
+
+const bool all_pkts_1_shot = 0;
+
+//const bool optimisation_on = 0;
+
+
+
+
+typedef int[1,rules_no] rul;
+typedef int[1,packets_no] pkts;
+
+
+typedef int[0,switches-1] SW0; /* Set of all switches (bounded integer) */
+typedef int[0,clients-1] C0;   /* Set of all clients */
+
+
+typedef int[5000,4999+switches] SW; /* Set of all switches (bounded integer) - shifted */
+typedef int[6000,5999+clients] C;   /* Set of all clients -shifted */
+typedef int[4999,5999+clients] mis_SW_C; /* All nodes: clients, switches and the misconn */
+typedef int[-22,10] priority_t;
+typedef int[-22,ports] port_t;
+typedef int[1,ports] phys_ports;
+
+
+
+const int wildcard      = 0;  
+const int discard       =  0;  /* -1 encodes the drop action */
+const int recipient_missing = -1; /* recipient_missing from MAC table */
+const int misconnection       = 4999;
+const int client_port   =   1;
+const int first_switch   = 5000;
+const int last_switch   = 4999 + switches;
+const int mid_switch    = 5000 + switches/2;
+const int first_client   = 6000;
+const int last_client   = 5999 + clients;
+
+//const int32_t invariant_changed = 1 &lt;&lt; 31;
+
+
+int32_t MAC_cs;
+int32_t P[pkts]; 
+int32_t R[rul]; 
+
+
+
+
+
+void set_bit(int32_t &amp;n, int pos){
+
+    n |= 1 &lt;&lt; pos;
+}
+
+
+void clear_bit(int32_t &amp;n, int pos){
+
+    n &amp;= ((1 &lt;&lt; pos) ^ -1);  
+}
+
+
+
+/* A bitfield is a range of bits working as a single number. 
+ * We (usually) can't access these ranges directly because 
+ * memory is accessed in (multi-)byte-sized datatypes
+ * Bits 0-1, for e.g., are acting as 'src', 2 and 3 as the 'dest' field and 4-6 as the 'reached', etc.
+ *
+ * For e.g., assuming that up to 3 ports are present in the topology, two bits are enough (mask = 3) to store them. 
+ * So, the in_port pt will be encoded in packet pk (positions 10 and 11) as follows:
+
+pt: **************nn  // 
+pt: 00000000000000nn  // pt &amp; 3
+pt: 0000nn0000000000  // pt = (pt &amp; 3) &lt;&lt; 10
+
+pk: bbbbPPtttttttttt  // 
+pk: bbbb00tttttttttt  // pk = (pk &amp; ((3 &lt;&lt; 10) ^ -1) )
+pk: bbbbnntttttttttt  // pk = pk | pt
+
+
+ */
+void encode_bitfield(int field_id, int dec_new_field_val, int32_t &amp;p_r){
+
+  int from = from_bit(field_id);
+  int mask = (1 &lt;&lt; bitfield_length(field_id)) -1 ;  // for "masking off" (masking to 0) 
+
+    if(bitfield_length(field_id) == 1){
+
+        set_bit(p_r, from_bit(field_id) );
+
+    }
+    else{
+        dec_new_field_val = (dec_new_field_val &amp; mask) &lt;&lt; from_bit(field_id);
+        p_r = (p_r &amp; (   (mask &lt;&lt; from_bit(field_id)) ^ -1 )         );
+        p_r = p_r | dec_new_field_val;
+    } 
+
+}
+
+
+
+
+int decode_bitfield(int field_id, int32_t p_r){
+
+  int32_t i = p_r;
+  int mask = (1 &lt;&lt; bitfield_length(field_id)) -1 ; // for "masking off" (masking to 0) 
+  int32_t y;
+
+    if(bitfield_length(field_id) == 1){
+        if( i &amp; (1 &lt;&lt; from_bit(field_id)) ){
+            y = 1;
+        }
+        else{
+            y = 0;
+        }
+    }
+    else{
+        y = (i &gt;&gt;  from_bit(field_id) ) &amp; mask;
+    }
+
+    return y; 
+
+}
+
+
+void undef_packet_32(int32_t &amp;p){
+
+  //  p |= 1 &lt;&lt; 31 ;  // 1000 0000 0000 0000 0000 0000 0000 0000 (- 2,147,483,648)
+     p = 0;
+}
+
+
+
+
+
+void undef_rule_32(int32_t &amp;r){
+
+   // r |= 1 &lt;&lt; 31 ;  // 1000 0000 0000 0000 0000 0000 0000 0000 (- 2,147,483,648)
+      r = 0;
+}
+
+
+/*
+void init_rule_32(int32_t &amp;r){ // gives default values to fields that should be defined 
+
+    encode_bitfield(out_port, discard, r);
+    encode_bitfield(prio, 1, r);
+    encode_bitfield(install, true, r);
+
+}
+*/
+
+
+// when topology =2, 6000 communicate with 6001 and vice-versa
+bool can_communicate(C l_client, C r_client)
+{
+
+    bool c2c[C][C];
+
+    c2c[6000][6001] = true;
+    c2c[6001][6002] = true;
+    c2c[6002][6003] = true;
+    c2c[6003][6000] = true;
+
+
+    return c2c[l_client][r_client];
+
+}
+
+int client_pairs_communicating(){
+    int i = 0;
+    for(s : C){
+        for(d : C){
+            if(can_communicate(s, d) ){
+                i++;
+            }
+        }
+    }
+return i;
+}
+
+
+
+int out_port_of_packet_32(int32_t p){
+    return (decode_bitfield(_out_port_,p));
+}
+
+
+
+/*
+ * Due to the (0,infinite) simulation pre-order, p is deleted only if it is not an alpha one
+ */
+bool oo_alpha_32(int32_t p, SW sw){
+
+
+       return( exists (i : pkts)  
+                
+            ((P[i] &amp; mask_same_pkt_alpha)        ==     (p &amp; mask_same_pkt_alpha))  
+              
+        );
+}
+
+
+
+//int32_t p1 = 183865; // 101100111000111001
+//int32_t p2 = 249401; // 111100111000111001
+//int32_t srcccc = 249401 &amp; mask_src;
+//bool compare = (183865 &amp; 63)    ==     (249401 &amp; 63);
+
+
+
+bool oo_32(int32_t p1, int32_t p2){
+
+
+       return(        
+                ((p1 &amp; mask_same_pkt)        ==     (p2 &amp; mask_same_pkt))      
+        );
+}
+
+
+int priority_of_rule_32(int32_t r){
+    return (decode_bitfield(_prio_,    r));
+}
+
+int out_port_of_rule_32(int32_t r){
+    return (decode_bitfield(_out_port_,r));
+}
+
+
+/* An undefined field (wildcard, all-x), can be matched by any packet's corresponding field 
+ * r1 is the one already installed and r2 the one to be installed
+ */
+bool same_rules_32(int32_t r1, int32_t r2) 
+{
+
+  int32_t r1_src_m =  r1 &amp; mask_src;
+  int32_t r2_src_m =  r2 &amp; mask_src;
+
+  int32_t r1_dest_m =  r1 &amp; mask_dest;
+  int32_t r2_dest_m =  r2 &amp; mask_dest;
+
+  int32_t r1_in_port_m =  r1 &amp; mask_in_port;
+  int32_t r2_in_port_m =  r2 &amp; mask_in_port;
+
+  int32_t r1_out_port_m =  r1 &amp; mask_out_port;
+  int32_t r2_out_port_m =  r2 &amp; mask_out_port;
+
+  int32_t r1_prio_m =  r1 &amp; mask_prio;
+  int32_t r2_prio_m =  r2 &amp; mask_prio;
+
+  int32_t r1_install_m =  r1 &amp; mask_install;
+  int32_t r2_install_m =  r2 &amp; mask_install;
+
+    return(
+
+    r1 != 0 &amp;&amp; r2 != 0        and
+
+
+    (  r1_src_m == wildcard imply r2_src_m == wildcard   )  and
+    (  r2_src_m == wildcard imply r1_src_m == wildcard   )  and
+
+    (  r1_dest_m == wildcard imply r2_dest_m == wildcard   )  and
+    (  r2_dest_m == wildcard imply r1_dest_m == wildcard   )  and
+
+    (  r1_in_port_m == wildcard imply r2_in_port_m == wildcard   )  and
+    (  r2_in_port_m == wildcard imply r1_in_port_m == wildcard   )  and
+
+    (  r1_src_m     != wildcard imply r1_src_m     == r2_src_m      )  and
+    (  r1_dest_m    != wildcard imply r1_dest_m    == r2_dest_m     )  and
+    (  r1_in_port_m != wildcard imply r1_in_port_m == r2_in_port_m  )  and
+
+                                                      (  r1_out_port_m == r2_out_port_m )  and
+                                                      (  r1_prio_m     == r2_prio_m     )  and
+                                                      (  r1_install_m  == r2_install_m  )  
+   ) ;
+}
+
+
+
+bool oo_rules_32(int32_t r1, int32_t r2) 
+{
+
+    return(
+
+            ((r1 &amp; mask_same_rule)        ==     (r2 &amp; mask_same_rule))    
+                                              ) ;
+}
+
+
+
+
+/* Two flow entries overlap if a single packet may match both, and  
+ * if a field is undefined for one rule and defined for another
+ * coz undefined (omitted) fields are wildcards (having value ANY): we say field is wildcarded (not present)
+ */
+bool overlapping_rules_32(int32_t r1, int32_t r2)
+{
+
+  int32_t r1_src_m =  r1 &amp; mask_src;
+  int32_t r2_src_m =  r2 &amp; mask_src;
+
+  int32_t r1_dest_m =  r1 &amp; mask_dest;
+  int32_t r2_dest_m =  r2 &amp; mask_dest;
+
+  int32_t r1_in_port_m =  r1 &amp; mask_in_port;
+  int32_t r2_in_port_m =  r2 &amp; mask_in_port;
+
+
+    return(
+
+            (r1 != 0 &amp;&amp; r2 != 0                      and
+
+              ( same_rules_32(r1,r2)   ||
+
+               !( 
+                    (  r1_src_m == wildcard imply r2_src_m == wildcard   )  and
+                    (  r2_src_m == wildcard imply r1_src_m == wildcard   )  and
+
+                    (  r1_dest_m == wildcard imply r2_dest_m == wildcard   )  and
+                    (  r2_dest_m == wildcard imply r1_dest_m == wildcard   )  and
+
+                    (  r1_in_port_m == wildcard imply r2_in_port_m == wildcard   )  and
+                    (  r2_in_port_m == wildcard imply r1_in_port_m == wildcard   )  
+                ) 
+              )                                                           
+            )                                               
+          );
+}
+
+
+
+
+
+//linear search 
+int rule_position(int32_t r)
+{
+   int j; 
+
+   for (j = 1; j &lt;= rules_no; ++j)
+   {
+      if ( oo_rules_32(R[j], r))
+      {
+         return j; 
+      }
+   }
+   return -1; //value not found
+}
+
+
+//iterative binary search
+int rule_position_32(int32_t r){
+   int first  = 1;
+   int last   = rules_no;
+   int middle;
+   
+    while (first &lt;= last)
+    {
+        middle = first + (last - first)/2;
+
+        if ((r&amp;mask_same_rule) == (R[middle]&amp;mask_same_rule))
+            return middle;
+
+        if ((r&amp;mask_same_rule) &gt; (R[middle]&amp;mask_same_rule))
+            first = middle + 1;
+        else 
+            last = middle - 1;
+    }
+    return -1; //search value not found
+}
+
+
+
+bool rule_installed_32(rul r, SW sw){
+ 
+    return (   (R[r] &amp; (1 &lt;&lt; (from_bit(_ft_)+sw-first_switch) )) != 0 );
+}
+ 
+
+bool rule_in_cb_32(rul r, SW sw){
+ 
+    return (   (R[r] &amp; (1 &lt;&lt; (from_bit(_cb_)+sw-first_switch) )) != 0 );
+}
+
+bool rule_adds_flow_entry_32(rul r, SW sw){
+ 
+    return (   (R[r] &amp; mask_install) != 0  );
+}
+
+
+
+void send_rule_32(rul r, SW sw){
+
+    if(
+        (  rule_adds_flow_entry_32(r, sw) and !rule_installed_32(r,sw)  )  or  
+        ( !rule_adds_flow_entry_32(r, sw) and  rule_installed_32(r,sw)  )
+    ){
+        set_bit(  R[r], from_bit(_cb_)+sw-first_switch  );
+    }
+}
+   
+
+void add_rule_to_ft_32(rul r, SW sw){
+
+        set_bit(  R[r], from_bit(_ft_)+sw-first_switch  );
+    
+}
+
+bool node_is_client(int[4999,5999+clients] node){
+    return(
+            node &gt;= 6000 &amp;&amp; node &lt; 6000+clients
+          );
+}
+
+bool node_is_switch(int[4999,5999+clients] node){
+    return(
+            node &gt;= 5000 &amp;&amp; node &lt; 5000+switches
+          );
+}
+
+
+
+/* this is a ring topology: each node connects to exactly two other nodes (port 3 of sw to port 2 of sw+1). 
+   Ports 1 connects the hosts with the switches: 5xxx &lt;-&gt; 6xxx 
+
+   To simulate a loop, remove the Kuai branch and set switches = 2
+*/
+void conn(int[4999,5999+clients] &amp;node, port_t &amp;port){
+
+
+  int[4999,5999+clients] adjacent_n = misconnection;
+  phys_ports adjacent_n_p;
+
+     if(topology == 2){ // these are the nX2 topologies with only 2 clients 6000 and 6001
+
+             if    (node == first_switch  &amp;&amp; port == 1) { adjacent_n = 6000;  adjacent_n_p = client_port    ;    }
+        else if    (node == last_switch   &amp;&amp; port == 2) { adjacent_n = 6001;  adjacent_n_p = client_port    ;    }
+
+        else if    (node != last_switch   &amp;&amp; port == 2) { adjacent_n = node+1;  adjacent_n_p = 1              ;    }
+        else if    (node != first_switch  &amp;&amp; port == 1) { adjacent_n = node-1;  adjacent_n_p = 2              ;    }
+
+        else if    (node == 6000 ) { adjacent_n = first_switch;  adjacent_n_p = 1    ;    }
+        else if    (node == 6001 ) { adjacent_n = last_switch;   adjacent_n_p = 2    ;    }
+     }
+
+    if(topology == 3){ // these are the nX3 topologies with only 3 clients 6000, 6001 and 6002
+             if    (node == first_switch  &amp;&amp; port == 1) { adjacent_n = 6000;  adjacent_n_p = client_port    ;    }
+        else if    (node == mid_switch    &amp;&amp; port == 3) { adjacent_n = 6001;  adjacent_n_p = client_port    ;    }
+        else if    (node == last_switch   &amp;&amp; port == 2) { adjacent_n = 6002;  adjacent_n_p = client_port    ;    }
+
+        else if    (node != last_switch   &amp;&amp; port == 2) { adjacent_n = node+1;  adjacent_n_p = 1              ;    }
+        else if    (node != first_switch  &amp;&amp; port == 1) { adjacent_n = node-1;  adjacent_n_p = 2              ;    }
+
+        else if    (node == 6000 ) { adjacent_n = first_switch;  adjacent_n_p = 1    ;    }
+        else if    (node == 6001 ) { adjacent_n = mid_switch;    adjacent_n_p = 3    ;    }
+        else if    (node == 6002 ) { adjacent_n = last_switch;   adjacent_n_p = 2    ;    }
+    }
+
+
+    if(topology == 34){ 
+             if    (node == first_switch  &amp;&amp; port == 1) { adjacent_n = 6000;  adjacent_n_p = client_port    ;    }
+        else if    (node == first_switch  &amp;&amp; port == 3) { adjacent_n = 6002;  adjacent_n_p = client_port    ;    }
+        else if    (node == mid_switch    &amp;&amp; port == 3) { adjacent_n = 6001;  adjacent_n_p = client_port    ;    }
+        else if    (node == last_switch   &amp;&amp; port == 2) { adjacent_n = 6003;  adjacent_n_p = client_port    ;    }
+
+        else if    (node != last_switch   &amp;&amp; port == 2) { adjacent_n = node+1;  adjacent_n_p = 1              ;    }
+        else if    (node != first_switch  &amp;&amp; port == 1) { adjacent_n = node-1;  adjacent_n_p = 2              ;    }
+
+        else if    (node == 6000 ) { adjacent_n = first_switch;  adjacent_n_p = 1    ;    }
+        else if    (node == 6001 ) { adjacent_n = mid_switch;    adjacent_n_p = 3    ;    }
+        else if    (node == 6002 ) { adjacent_n = first_switch;  adjacent_n_p = 3    ;    }
+        else if    (node == 6003 ) { adjacent_n = last_switch;   adjacent_n_p = 2    ;    }
+    }
+
+    if(topology == 44){ 
+             if    (port == 3) { adjacent_n = node + 1000;  adjacent_n_p = client_port    ;    }
+
+        else if    (node != last_switch   &amp;&amp; port == 2) { adjacent_n = node+1;  adjacent_n_p = 1              ;    }
+        else if    (node != first_switch  &amp;&amp; port == 1) { adjacent_n = node-1;  adjacent_n_p = 2              ;    }
+
+        else if    (node_is_client(node) ) { adjacent_n = node - 1000;  adjacent_n_p = 3    ;    }
+    }
+
+
+    if(topology == 33){
+             if    (node == 5000  &amp;&amp; port == 1) { adjacent_n = 6000;  adjacent_n_p = client_port    ;    }
+        else if    (node == 5000  &amp;&amp; port == 2) { adjacent_n = 5001;  adjacent_n_p = 1              ;    }
+        else if    (node == 5000  &amp;&amp; port == 3) { adjacent_n = 5002;  adjacent_n_p = 1              ;    }
+        else if    (node == 5001  &amp;&amp; port == 1) { adjacent_n = 5000;  adjacent_n_p = 2              ;    }
+        else if    (node == 5001  &amp;&amp; port == 2) { adjacent_n = 6001;  adjacent_n_p = client_port    ;    }
+        else if    (node == 5002  &amp;&amp; port == 1) { adjacent_n = 5000;  adjacent_n_p = 3              ;    }
+        else if    (node == 5002  &amp;&amp; port == 3) { adjacent_n = 6002;  adjacent_n_p = client_port    ;    }
+
+        else if    (node == 6000 ) { adjacent_n = 5000;  adjacent_n_p = 1    ;    }
+        else if    (node == 6001 ) { adjacent_n = 5001;  adjacent_n_p = 2    ;    }
+        else if    (node == 6002 ) { adjacent_n = 5002;  adjacent_n_p = 3    ;    }
+
+    }
+    else if(topology == 63){
+
+             if    (node == 5000  &amp;&amp; port == 1) { adjacent_n = 6000;  adjacent_n_p = client_port    ;    }
+        else if    (node == 5000  &amp;&amp; port == 2) { adjacent_n = 5001;  adjacent_n_p = 1              ;    }
+
+        else if    (node == 5001  &amp;&amp; port == 1) { adjacent_n = 5000;  adjacent_n_p = 2              ;    }
+        else if    (node == 5001  &amp;&amp; port == 2) { adjacent_n = 5002;  adjacent_n_p = 1              ;    }
+
+        else if    (node == 5002  &amp;&amp; port == 1) { adjacent_n = 5001;  adjacent_n_p = 2              ;    }
+        else if    (node == 5002  &amp;&amp; port == 2) { adjacent_n = 5003;  adjacent_n_p = 1              ;    }
+        else if    (node == 5002  &amp;&amp; port == 3) { adjacent_n = 6002;  adjacent_n_p = client_port    ;    }
+
+        else if    (node == 5003  &amp;&amp; port == 1) { adjacent_n = 5002;  adjacent_n_p = 2              ;    }
+        else if    (node == 5003  &amp;&amp; port == 2) { adjacent_n = 5004;  adjacent_n_p = 1              ;    }
+
+        else if    (node == 5004  &amp;&amp; port == 1) { adjacent_n = 5003;  adjacent_n_p = 2              ;    }
+        else if    (node == 5004  &amp;&amp; port == 2) { adjacent_n = 5005;  adjacent_n_p = 1              ;    }
+
+        else if    (node == 5005  &amp;&amp; port == 2) { adjacent_n = 6001;  adjacent_n_p = client_port    ;    }
+        else if    (node == 5005  &amp;&amp; port == 1) { adjacent_n = 5004;  adjacent_n_p = 2              ;    }
+
+
+        else if    (node == 6000 ) { adjacent_n = 5000;  adjacent_n_p = 1    ;    }
+        else if    (node == 6001 ) { adjacent_n = 5005;  adjacent_n_p = 2    ;    }
+        else if    (node == 6002 ) { adjacent_n = 5002;  adjacent_n_p = 3    ;    }
+
+    }
+    else if(topology == 92){
+
+
+             if    (node == 5000  &amp;&amp; port == 1) { adjacent_n = 6000;  adjacent_n_p = client_port    ;    }
+        else if    (node == 5000  &amp;&amp; port == 2) { adjacent_n = 5001;  adjacent_n_p = 1              ;    }
+
+        else if    (node == 5001  &amp;&amp; port == 1) { adjacent_n = 5000;  adjacent_n_p = 2              ;    }
+        else if    (node == 5001  &amp;&amp; port == 2) { adjacent_n = 5002;  adjacent_n_p = 1              ;    }
+
+        else if    (node == 5002  &amp;&amp; port == 1) { adjacent_n = 5001;  adjacent_n_p = 2              ;    }
+        else if    (node == 5002  &amp;&amp; port == 2) { adjacent_n = 5003;  adjacent_n_p = 1              ;    }
+
+        else if    (node == 5003  &amp;&amp; port == 1) { adjacent_n = 5002;  adjacent_n_p = 2              ;    }
+        else if    (node == 5003  &amp;&amp; port == 2) { adjacent_n = 5004;  adjacent_n_p = 1              ;    }
+
+        else if    (node == 5004  &amp;&amp; port == 1) { adjacent_n = 5003;  adjacent_n_p = 2              ;    }
+        else if    (node == 5004  &amp;&amp; port == 2) { adjacent_n = 5005;  adjacent_n_p = 1              ;    }
+
+        else if    (node == 5005  &amp;&amp; port == 1) { adjacent_n = 5004;  adjacent_n_p = 2              ;    }
+        else if    (node == 5005  &amp;&amp; port == 2) { adjacent_n = 5006;  adjacent_n_p = 1              ;    }
+
+        else if    (node == 5006  &amp;&amp; port == 1) { adjacent_n = 5005;  adjacent_n_p = 2              ;    }
+        else if    (node == 5006  &amp;&amp; port == 2) { adjacent_n = 5007;  adjacent_n_p = 1              ;    }
+
+        else if    (node == 5007  &amp;&amp; port == 1) { adjacent_n = 5006;  adjacent_n_p = 2              ;    }
+        else if    (node == 5007  &amp;&amp; port == 2) { adjacent_n = 5008;  adjacent_n_p = 1              ;    }
+
+        else if    (node == 5008  &amp;&amp; port == 2) { adjacent_n = 6001;  adjacent_n_p = client_port    ;    }
+        else if    (node == 5008  &amp;&amp; port == 1) { adjacent_n = 5007;  adjacent_n_p = 2              ;    }
+
+
+        else if    (node == 6000 ) { adjacent_n = 5000;  adjacent_n_p = 1    ;    }
+        else if    (node == 6001 ) { adjacent_n = 5008;  adjacent_n_p = 2    ;    }
+ 
+    }
+
+    node = adjacent_n;
+    port = adjacent_n_p;
+}
+
+
+int switch_of_client(int[4999,5999+clients] c){
+  port_t port_c;       
+        conn(c, port_c);
+  return c;       
+}
+
+
+int switch_port_of_client(int[4999,5999+clients] c){
+  port_t port_c;       
+        conn(c, port_c);
+  return port_c;       
+}
+
+
+bool valid_switch_port(int[4999,5999+clients] sw, port_t p){
+  int[4999,5999+clients] A_node = sw ;
+  int[4999,5999+clients] B_node;
+        conn(A_node, p);
+        B_node = A_node;
+  return B_node != misconnection;
+}
+
+
+int number_of_valid_switch_ports(int[4999,5999+clients] sw){
+  port_t j;
+  int[4999,5999+clients] A_node = sw ;
+  int[4999,5999+clients] B_node;
+  int p;
+
+    for(i : phys_ports){
+        j = i;
+        conn(A_node, j);
+        B_node = A_node;
+        if(B_node != misconnection){
+            p++;
+        }
+    A_node = sw;
+    }
+  return p;
+}
+
+
+
+bool switch_client_conn(SW sw, C c){
+  int i = 1;
+  port_t j;
+  bool sw_c;  
+  int[4999,5999+clients] A_node;
+  int[4999,5999+clients] B_node;
+       
+    while(i &lt;= ports and not sw_c) {
+        j = i;
+        A_node = sw;
+        conn(A_node, j);
+        B_node = A_node;
+        if(B_node == c){    
+            sw_c = true;
+        }
+    i++;
+    }
+  return sw_c;       
+}
+
+
+bool swsw_direct_connection(SW sw1, SW sw2){
+  int i = 1;
+  port_t j;  
+  bool sw_sw;  
+  int[4999,5999+clients] A_node ;
+  int[4999,5999+clients] B_node;
+       
+    while(i &lt;= ports and not sw_sw) {
+        j = i;
+        A_node = sw1;
+        conn(A_node, j);
+        B_node = A_node;
+        if(B_node == sw2){    
+            sw_sw = true;
+        }
+    i++;
+    }
+  return sw_sw;       
+}
+
+
+
+int[4999,5999+clients] next_hop_box(port_t out_port, int[4999,5999+clients] A_node ){
+    conn(A_node,out_port); 
+return A_node;
+}
+
+
+port_t next_hop_box_port(port_t out_port, int[4999,5999+clients] A_node ){
+    conn(A_node,out_port); 
+return out_port;
+}
+
+
+
+
+
+
+bool client_connecting_switch_port(SW sw, port_t p){
+  int[4999,5999+clients] A_node = sw ;
+  int[4999,5999+clients] B_node;
+
+    conn(A_node, p);
+    B_node = A_node;
+    return node_is_client(B_node);
+}
+
+
+
+
+/* We generate here all possible packets according to the 
+ * packet fields in question, i.e., src, dest and reached
+ */
+void generate_Packets(){
+
+  int q[100][switches][2]; // a queue which stores the paths
+  int path[switches][2];       // path vector to store the current path as (switch, in_port) tuples
+  int newpath[switches];
+  bool isNotVisited;
+  int stack[switches]; // a stack used to do iterative DFS
+  int q_l = 0;
+  int path_l = 0;
+  int last;
+  int vert;
+  bool visited[SW];
+  int[4999,5999+clients] current_node, next_node;
+  int current_in_port, next_in_port;
+  int i;
+  int path_index; 
+  int op = 1;
+  int outp = 1;
+  int32_t p_32;
+  int j = 1;
+  int jj = 1;
+  int u = first_switch;
+  int v ;
+  int b;
+  int k ; 
+  int bits_set;
+  int32_t r_32;
+  int rru  = 1;
+  int ruu = 1;
+    undef_rule_32(r_32);
+    undef_packet_32(p_32);
+    encode_bitfield(_prio_, 1, r_32);
+    encode_bitfield(_install_, true, r_32);
+
+
+
+    for(s : C){
+        for(d : C){
+            if(can_communicate(s, d)){
+                        // these packets are the very first ones send by the clients
+                        current_node = switch_of_client(s);                        
+                        current_in_port = switch_port_of_client(s);
+
+                                                    encode_bitfield(_src_,     s-first_client+1,p_32);
+                                                    encode_bitfield(_dest_,    d-first_client+1,p_32);
+                                                    encode_bitfield(_in_port_, current_in_port, p_32);
+                                                    for (sw: SW){
+                                                        clear_bit(p_32, from_bit(_reached_)+sw-first_switch );
+                                                    }
+                                                    P[jj] = p_32;
+                                                    undef_packet_32(p_32);
+                                                    jj++;          
+
+
+
+                            // we build the rules which correspond to the preliminary packets above
+                            for(op = 1; op &lt;= ports; op++){
+                                if( valid_switch_port(current_node, op) and not client_connecting_switch_port(current_node, op)  and op != current_in_port  ){
+
+
+                                                    encode_bitfield(_src_,     s-first_client+1,r_32);
+                                                    encode_bitfield(_dest_,    d-first_client+1,r_32);
+                                                    encode_bitfield(_in_port_, current_in_port, r_32);
+                                                    encode_bitfield(_out_port_,op,              r_32);
+                                                    R[ruu] = r_32;
+                                                    undef_rule_32(r_32);
+                                                    r_32 = init_rule;
+                                                    ruu++;
+                                }
+                            }                    
+
+
+              
+                        // BFS
+
+
+                        for(k = 0; k &lt; 100; k++){
+                            for(i = 0; i &lt; switches - 1; i++){
+                                q[k][i][0] = 0;
+                                q[k][i][1] = 0;
+                            }
+                        }
+                        q_l = 0;
+                        path_l = 0;
+
+                        q[0][0][0] = current_node; 
+                        q[0][0][1] = current_in_port; 
+                        q_l++;
+
+                        while(q_l &gt; 0)  // // run till stack is not empty
+                        {
+                            // Pop the frontmost path from queue (pop-front) 
+                            path = q[0]; 
+
+                            for(i = 0; i &lt; q_l; i++){
+                                q[i] = q[i+1];                              
+                            }
+                            for(i = 0; i &lt; switches - 1; i++){
+                                q[q_l -1][i][0] = 0;
+                                q[q_l -1][i][1] = 0;
+                            }
+                            q_l--;     
+                            i = 0;
+                            while(i &lt; switches-1 and path[i+1][0] != 0){ // find the size of the path
+                                i++;
+                            }
+                            path_l = i+1;
+                            current_node    = path[path_l - 1][0]; // the last node in path
+                            current_in_port = path[path_l - 1][1];
+
+                            /* traverse to all the nodes connected to  
+                             * current vertex and push new path to queue */
+                            for(op = 1; op &lt;= ports; op++){
+                                if( valid_switch_port(current_node, op) and not client_connecting_switch_port(current_node, op)  and op != current_in_port  ){
+                                    next_in_port = next_hop_box_port(op, current_node );
+                                    next_node = next_hop_box(op, current_node);
+                                                if( !exists( vis : int[0,switches - 1]) path[vis][0] == next_node){ // check if current vertex is already present in path 
+                                             
+                                                        //  we create now a new path from earlier path and append this vertex
+                                                        for(i = 0; i &lt; switches; i++){ 
+                                                            q[q_l][i][0] = 0; 
+                                                            q[q_l][i][1] = 0; 
+                                                        }
+                                                        q[q_l] = path; // push back
+                                                        q_l++;
+                                                        q[q_l -1][path_l ][0] = next_node;                                         
+                                                        q[q_l -1][path_l ][1] = next_in_port;   
+
+
+                                            // rewritten packet with updated history reached[]
+
+                                                    encode_bitfield(_src_,     s-first_client+1,p_32);
+                                                    encode_bitfield(_dest_,    d-first_client+1,p_32);
+                                                    for (swit: SW){
+                                                        clear_bit(p_32, from_bit(_reached_)+swit-first_switch );
+                                                    }
+                                                    for(k = 0; k &lt;= path_l; k++){
+                                                         if(path[k][0] != 0){ 
+                                                            set_bit(p_32, from_bit(_reached_)+path[k][0]-first_switch );                                                           
+                                                         }
+                                                    }
+                                                    encode_bitfield(_in_port_, next_in_port,    p_32);
+                                                    P[jj] = p_32;
+                                                    p_32 = 0;
+                                                    jj++;          
+
+
+                            // we build the rules which correspond to the rewritten packets above
+                            for(outp = 1; outp &lt;= ports; outp++){
+                                if( valid_switch_port(next_node, outp) and  (not client_connecting_switch_port(next_node, outp) or (next_node == switch_of_client(d) and outp == switch_port_of_client(d) ))  and outp != next_in_port  ){
+
+
+                                                    encode_bitfield(_src_,     s-first_client+1,r_32);
+                                                    encode_bitfield(_dest_,    d-first_client+1,r_32);
+                                                    encode_bitfield(_in_port_, next_in_port,    r_32);
+                                                    encode_bitfield(_out_port_,outp,            r_32);
+                                                    if(!exists(i : rul) R[i] == r_32){
+                                                        R[ruu] = r_32;
+                                                        ruu++; 
+                                                    } 
+                                                    r_32 = 0;
+                                                    r_32 = init_rule;
+
+                                }
+                            }                    
+
+
+                                                                    
+                                                }
+                                }
+                            }
+                        }
+            }                                                           
+        }                        
+    }
+}
+
+
+
+void selectionSort()
+{
+  int i, j, min_idx, temp;  
+    // One by one move boundary of unsorted subarray  
+    for (i = 1; i &lt; packets_no; i++)  
+    {  
+        // Find the minimum element in unsorted array  
+        min_idx = i;  
+        for (j = i+1; j &lt;= packets_no; j++)  
+        if (P[j] &lt; P[min_idx])  
+            min_idx = j;  
+  
+        // Swap the found minimum element with the first element  
+        temp = P[min_idx];
+        P[min_idx]  = P[i];
+        P[i] = temp; 
+    }  
+
+    for (i = 1; i &lt; rules_no; i++)  
+    {  
+        // Find the minimum element in unsorted array  
+        min_idx = i;  
+        for (j = i+1; j &lt;= rules_no; j++)  
+        if (R[j] &lt; R[min_idx])  
+            min_idx = j;  
+  
+        // Swap the found minimum element with the first element  
+        temp = R[min_idx];
+        R[min_idx]  = R[i];
+        R[i] = temp; 
+    }  
+
+} 
+
+void BubbleSort()
+{
+    int i, j;
+    int32_t temp;
+ 	for (i = 1; i &lt;= packets_no; i++)
+ 	{
+		for (j = 1; j &lt;= packets_no - i; j++ )
+		{
+			if ((P[j] &amp; mask_same_pkt) &gt; (P[j+1]&amp;mask_same_pkt))
+            {
+                temp = P[j];
+                P[j] = P[j+1];
+                P[j+1] = temp;
+            }
+         }
+     }
+
+
+ 	for (i = 1; i &lt;= rules_no; i++)
+ 	{
+		for (j = 1; j &lt;= rules_no - i; j++ )
+		{
+			if ((R[j] &amp; mask_same_rule) &gt; (R[j+1]&amp;mask_same_rule))
+            {
+                temp = R[j];
+                R[j] = R[j+1];
+                R[j+1] = temp;
+            }
+         }
+     }
+
+ } 
+
+
+
+bool packet_has_visited_switch(pkts p, SW sw){
+ 
+    return (  (P[p] &amp; (1 &lt;&lt; (from_bit(_reached_)+sw-first_switch) )) != 0); 
+}
+
+
+bool packet_in_pb_32(pkts p, SW sw){
+ 
+    return (  (P[p] &amp; (1 &lt;&lt; (from_bit(_pb_)+sw-first_switch) )) != 0); // it's not like C++ where non zero integers automatically convert to true
+}
+
+
+bool packet_in_pIb_32(pkts p, SW sw){
+
+    return (  (P[p] &amp; (1 &lt;&lt; (from_bit(_pIb_)+sw-first_switch) )) != 0 );
+}
+
+bool packet_in_pOb_32(pkts p, SW sw){
+
+    return (  (P[p] &amp; (1 &lt;&lt; (from_bit(_pOb_)+sw-first_switch) )) != 0 );
+}
+
+
+void set_reached(int32_t &amp;pkt, SW sw){
+  int pos = from_bit(_reached_)+sw-first_switch;
+    set_bit(pkt, pos );
+}
+
+
+
+
+//linear search 
+int packet_pos(int32_t pkt)
+{
+   int j; 
+
+   //loop through array
+   for (j = 1; j &lt;= packets_no; ++j)
+   {
+      if ( oo_32(P[j], pkt))
+      {
+         return j; 
+      }
+   }
+   return -1; //value not found
+}
+
+
+//binary search
+int packet_position(int32_t pkt){
+
+   int first  = 1;
+   int last   = packets_no;
+   int middle;
+   
+    while (first &lt;= last)
+    {
+        middle = first + (last - first)/2;
+
+        if ((pkt&amp;mask_same_pkt) == (P[middle]&amp;mask_same_pkt))
+            return middle;
+
+        if ((pkt&amp;mask_same_pkt) &gt; (P[middle]&amp;mask_same_pkt))
+            first = middle + 1;
+        else 
+            last = middle - 1;
+    }
+    return -1; //search value not found
+}
+
+
+
+
+
+/* This function stores packets to pq of sw. 
+ */
+void addpkt_32(int32_t pkt, SW sw){  
+  int pb_pos = from_bit(_pb_)+sw-first_switch;
+  int pkt_pos =  packet_position(pkt);
+    if((pkt &amp; (1 &lt;&lt; (pb_pos) )) == 0){      
+        set_bit(  P[pkt_pos], pb_pos  );
+        encode_bitfield(_out_port_, 0, P[pkt_pos]); //we reset any value left from the pOq
+
+    }
+}
+
+
+/* the arrival of an, say, protocol_of_interest == Telnet packet to the client violates the specification, thus invariant_failed = true;
+ */
+void client_packet_received_32(int32_t p, C c){
+}
+
+
+
+void client_send_packet_32(C s, C d){
+  int32_t p_32;
+  port_t cl_port;
+  int[4999,5999+clients] client = s;
+  int[4999,5999+clients] sw_of_client;
+  phys_ports sw_p_of_client;
+  undef_packet_32(p_32);
+
+    conn(client, cl_port);
+
+        sw_of_client = client;
+        sw_p_of_client = cl_port;
+
+        encode_bitfield(_src_, s- first_client+1, p_32);
+
+        for (sw: SW){
+            clear_bit(p_32, from_bit(_reached_)+sw-first_switch );
+        }
+        encode_bitfield(_dest_, d-first_client+1, p_32);
+        encode_bitfield(_in_port_, sw_p_of_client, p_32);
+
+        addpkt_32(p_32, sw_of_client);
+}
+
+
+
+void start_all_clients_32(){
+
+  for (s: C){
+    for (d: C){
+      if (can_communicate(s, d)){
+        client_send_packet_32(s, d);
+      }
+    }
+  }
+}
+
+
+
+
+void forward_32(int32_t p, port_t out_port, int[4999,5999+clients] A_node ){
+
+    int[4999,5999+clients] node = A_node;
+    C B_node_client;
+    SW B_node_switch;
+    int32_t new_pk;
+    
+    new_pk = p;
+
+    set_reached(new_pk, node );
+
+    conn(node,out_port); 
+
+    if(out_port != 0)  {     
+        if(node_is_client(node)){ /* node == client */
+                B_node_client = node;
+              //  client_packet_received_32(new_pk, B_node_client);
+        }
+        else if(node_is_switch(node)){ /* node is switch */
+                           B_node_switch = node; 						   
+                           encode_bitfield(_in_port_, out_port, new_pk);
+                           addpkt_32(new_pk,B_node_switch);
+         }
+        else if(node == misconnection) {  /* Packet loss due to misconnection (the conn-function didn't find entry)  */
+        }
+    }
+}
+
+
+
+
+
+void flood_32(int32_t p, SW sw){
+    for(i : phys_ports){
+        if(i != decode_bitfield(_in_port_,p)  and valid_switch_port(sw, i)  ){  /* All valid physical ports except input port and the symbolic 'discard' one. */
+           forward_32(p, i, sw);
+        }
+    }
+}
+
+
+
+
+
+/* A packet matches a flow table entry if the values in the packet match fields used for the lookup match
+ * those defined in the flow table entry. If a flow table entry field has a value of ANY (field omitted), it
+ * matches all possible values in the header.
+ */
+bool matched_32(int32_t p, int32_t r)
+{
+  int32_t r_src_m =  r &amp; mask_src;
+  int32_t p_src_m =  p &amp; mask_src;
+
+  int32_t r_dest_m =  r &amp; mask_dest;
+  int32_t p_dest_m =  p &amp; mask_dest;
+
+  int32_t r_in_port_m =  r &amp; mask_in_port;
+  int32_t p_in_port_m =  p &amp; mask_in_port;
+
+	return( r != 0
+
+          and  (  r_src_m     == wildcard or r_src_m     == p_src_m       )  
+          and  (  r_dest_m    == wildcard or r_dest_m    == p_dest_m      )  
+          and  (  r_in_port_m == wildcard or r_in_port_m == p_in_port_m   )  
+    ) ;
+}
+
+
+
+
+
+
+bool there_is_a_match_in_ft_32(int32_t p, SW sw)
+{
+	return(  exists(i : rul)  
+              matched_32(p, R[i]) &amp;&amp;
+              rule_installed_32(i,sw) 
+    ) ;
+}
+
+
+
+
+
+
+
+//============
+
+
+
+
+
+/* returns the highest priority whose rule matches the packet to be forwarded
+ *** The packet is matched against the table and only the highest priority flow entry that matches the
+ *** packet must be selected. 
+ */
+priority_t highest_priority_match_32(int32_t p, SW sw){
+  priority_t max = 0;
+  priority_t current_priority;
+
+    for(i : rul){
+      if(rule_installed_32(i,sw) and matched_32(p, R[i])){
+        current_priority = priority_of_rule_32(R[i]);
+            if(max &lt; current_priority){
+                max = current_priority;
+            }
+      }
+    }
+return max;
+}
+
+
+
+
+/* returns the the highest priority rule index whose pattern matches the packet in switch sw’s flow table. */ 
+int rule_index_best_match_32(int32_t p, SW sw){
+  priority_t current_priority;
+  int j;
+
+        current_priority = highest_priority_match_32(p, sw);
+
+        if (current_priority &gt; 0){  /* there's a match */
+            for(j : rul){
+                if(rule_installed_32(j,sw) and priority_of_rule_32(R[j]) == current_priority and matched_32(p,R[j])) {
+                    return j;
+				}
+			}
+		}
+	return -1;  //value not found
+}
+
+
+
+
+bool fwd_is_visible_32(int32_t p, port_t out_port, int[4999,5999+clients] A_node ) {
+    int[4999,5999+clients] node = A_node;
+    conn(node,out_port); 
+
+    return node_is_switch(node) and (p &amp; (1 &lt;&lt; (from_bit(_reached_)+node-first_switch) )) ;
+}
+
+
+
+bool ctrl_is_visible_32(int32_t p, SW sw ) {
+    return false;
+}
+
+
+/*
+int from_bit_mac(SW sw, C c){
+
+  int i = first_switch ;
+  int j = first_client ;
+  int from;
+  int fit_bits;
+  bool found = false;
+
+    while(i &lt;= last_switch and !found){ 
+        while(j &lt;= last_client and !found){  
+            if(!(i == sw and j == c)){
+                if(from &gt; 32 - countBits(number_of_valid_switch_ports(sw)) and from &lt; 32){ // i.e., if the bitfield (in_port) is splitted 
+                    fit_bits = 32 - from;
+                }
+                from += countBits(number_of_valid_switch_ports(i)) + fit_bits ; 
+            }
+            else{
+                found = true;
+            }        
+            j++;
+        }
+        j = first_client ;
+        i++;
+    }
+    return from;
+}
+*/
+
+
+
+/* these functions are for MAC table with 2 integers
+
+int from_bit_mac(SW sw, C c){
+
+  int from;
+
+    from = bitfield_length_in_port * (c-first_client + (clients * (sw -first_switch) ) );
+
+    if(from &gt; 31 and 32%bitfield_length_in_port &gt; 0){
+        from += bitfield_length_in_port; 
+    }
+    return from;
+}
+
+
+
+
+void encode_mac(SW sw, C c, phys_ports port){
+
+  int32_t p = port;
+  int from = from_bit_mac(sw, c);
+//  int mask = countBits(number_of_valid_switch_ports(sw)) + 1;  // for "masking off" (masking to 0) 
+  int mask = (1 &lt;&lt; bitfield_length_in_port) -1 ;  // for "masking off" (masking to 0) 
+  int mac_i;
+
+    if(from &gt; 31 ){ 
+        from -= 32  ;
+        mac_i = 1;
+    }
+    if(bitfield_length_in_port == 1){  // if(countBits(number_of_valid_switch_ports(sw)) == 1){
+        set_bit(MAC_cs[mac_i], from) ;
+    }
+    else{
+        p = (p &amp; mask) &lt;&lt; from;
+        MAC_cs[mac_i] = (MAC_cs[mac_i]&amp; (   (mask &lt;&lt; from)^-1 )         );
+        MAC_cs[mac_i] = MAC_cs[mac_i] | p;
+    }
+}
+
+
+
+int decode_mac(SW sw, C c){
+
+  int32_t i ;
+  int from = from_bit_mac(sw, c);
+  int mask = (1 &lt;&lt; bitfield_length_in_port) -1 ;  
+  int mac_i;
+  int32_t y;
+
+    if(from &gt; 31 ){ 
+        from -= 32  ;
+        mac_i = 1;
+    }
+    i = MAC_cs[mac_i];
+
+    if(bitfield_length_in_port == 1){  // if(countBits(number_of_valid_switch_ports(sw)) == 1){
+        if( i &amp; (1 &lt;&lt; from) ){
+            y = 1;
+        }
+        else{
+            y = 0;
+        }
+    }
+    else{
+        y = (i &gt;&gt;  from ) &amp; mask;
+    }
+    return y; 
+}
+
+*/
+
+
+//the below 3 functions are for MAC table of one 32-bit integer
+int from_bit_mac(SW sw, C c){
+
+    return bitfield_length_in_port * (c-first_client + (clients * (sw -first_switch) ) );
+}
+
+
+
+
+void encode_mac(SW sw, C c, phys_ports port){
+
+  int32_t p = port;
+  int from = from_bit_mac(sw, c);
+//  int mask = countBits(number_of_valid_switch_ports(sw)) + 1;  // for "masking off" (masking to 0) 
+  int mask = (1 &lt;&lt; bitfield_length_in_port) -1 ;  // for "masking off" (masking to 0) 
+
+    if(bitfield_length_in_port == 1){  // if(countBits(number_of_valid_switch_ports(sw)) == 1){
+        set_bit(MAC_cs, from) ;
+    }
+    else{
+        p = (p &amp; mask) &lt;&lt; from;
+        MAC_cs = (MAC_cs &amp; (   (mask &lt;&lt; from)^-1 )         );
+        MAC_cs = MAC_cs | p;
+    }
+}
+
+
+
+int decode_mac(SW sw, C c){
+
+  int32_t i ;
+  int from = from_bit_mac(sw, c);
+  int mask = (1 &lt;&lt; bitfield_length_in_port) -1 ;  
+  int32_t y;
+
+    i = MAC_cs;
+    if(bitfield_length_in_port == 1){  // if(countBits(number_of_valid_switch_ports(sw)) == 1){
+        if( i &amp; (1 &lt;&lt; from) ){
+            y = 1;
+        }
+        else{
+            y = 0;
+        }
+    }
+    else{
+        y = (i &gt;&gt;  from ) &amp; mask;
+    }
+    return y; 
+}
+
+
+
+
+
+/*
+ * ========================================================================================
+ *                                                                     
+ *   CONTROLLER PROGRAM
+ *
+ * ========================================================================================
+ */
+
+void controller_32(pkts p, SW sw){
+
+  int32_t pkt;
+  int32_t this_rule;
+
+  int mask = mask_src | mask_dest |  mask_in_port; // 63; //b111111
+  int32_t p_m ;
+
+    port_t out__port;
+    int i;
+
+    C packet_src;
+    C packet_dest;
+
+    pkt = P[p];
+ 
+        packet_src  = decode_bitfield(_src_, pkt)+first_client -1;
+        packet_dest = decode_bitfield(_dest_,pkt)+first_client -1;
+      
+    encode_mac(sw, packet_src, decode_bitfield(_in_port_,pkt));  /* Here, we store in the controller 
+                                                                     * the switch-port from the sender 
+                                                                     * MAC-address are encoded as 6XX*/
+    out__port = decode_mac(sw, packet_dest); /* the switch-port of the recipient */
+
+    if (out__port &gt; 0){    /* means that the the receiver’s location is already known */
+        if (out__port != decode_bitfield(_in_port_,pkt)){
+      
+            this_rule = init_rule;
+
+          //  encode_bitfield(src,     decode_bitfield(src,     pkt),    this_rule);
+          //  encode_bitfield(dest,    decode_bitfield(dest,    pkt),    this_rule);
+          //  encode_bitfield(in_port, decode_bitfield(in_port, pkt),    this_rule);
+
+            // we copy the src-dest=in_port from pkt to this_rule
+            p_m = pkt &amp; mask;
+            this_rule &amp;= (mask ^ -1);
+            this_rule |= p_m;
+
+            encode_bitfield(_out_port_,out__port,                        this_rule);
+
+            send_rule_32(rule_position_32(this_rule), sw);
+      
+            if(fwd_optimisation == 1 and not fwd_is_visible_32(pkt, out__port, sw) ){
+                forward_32(pkt, out__port, sw);
+            }
+            else{
+                set_bit(P[p], from_bit(_pOb_)+sw-first_switch );
+                encode_bitfield(_out_port_, out__port, P[p]);
+
+            }
+        } 
+    }
+    else {     /* the controller doesn't know the switch-port of the recipient */
+        /*  flooding */
+            if(fwd_optimisation == 1 and not fwd_is_visible_32(pkt, i, sw) ){
+                flood_32(pkt, sw);
+            }
+            else{
+                set_bit(P[p], from_bit(_pOb_)+sw-first_switch );
+                encode_bitfield(_out_port_, flood, P[p]);
+            }
+    }
+}
+
+
+
+
+/*
+ * ========================================================================================
+ * ========================================================================================
+ */
+
+</declaration>
+	<template>
+		<name>undef</name>
+		<declaration>void undefine_queues(){
+    int i;
+       for(i : pkts){
+            undef_packet_32(P[i]);
+       }
+       for(i : rul){
+           undef_rule_32(R[i]);
+       }    
+}
+
+
+
+/* this method builds packets deterministically.  
+ */
+void off(){
+        undefine_queues();
+    //    generate_Rules();
+        generate_Packets();
+selectionSort();
+//BubbleSort();
+        start_all_clients_32();
+
+
+//encode_bitfield(reached,     7,    P[1],    pk);
+ //tttt = P[1] &amp; (1 &lt;&lt; (from_bit(pb, pk)) ) ;
+// tttt = ( P[1] &gt;&gt; from_bit(pOb, pk))+5 &amp; 1  ;
+//tttt = countBits(number_of_valid_switch_ports(5004)); 
+//encode_mac(5003, decode_bitfield(src,P[7],  pk)+5999, decode_bitfield(in_port,P[7],  pk));
+   
+
+
+                                         
+}
+</declaration>
+		<location id="id0" x="119" y="59">
+		</location>
+		<location id="id1" x="42" y="85">
+			<committed/>
+		</location>
+		<init ref="id1"/>
+		<transition>
+			<source ref="id1"/>
+			<target ref="id0"/>
+			<label kind="assignment" x="17" y="195">off()</label>
+			<nail x="42" y="153"/>
+			<nail x="132" y="89"/>
+		</transition>
+	</template>
+	<template>
+		<name>pqSw</name>
+		<parameter>const SW sw</parameter>
+		<declaration>
+void remove_pk_from_pq_32(pkts p, SW sw){
+    if(oo_pq != 1
+                                    ){
+                    clear_bit(P[p], from_bit(_pb_)+sw-first_switch );        
+    }
+}
+
+
+
+
+void process_unmatched_packets_32(pkts p, SW sw){
+        if(ctrl_optimisation == 1 and not ctrl_is_visible_32(P[p], sw) ){
+            controller_32(p, sw);
+        }
+        else{
+            set_bit(  P[p], from_bit(_pIb_)+sw-first_switch  );
+         }
+        remove_pk_from_pq_32(p, sw);
+}
+
+
+
+
+void forward_matched_pkt_32(pkts p, SW A_node ){
+    int32_t new_p;
+    int[4999,5999+clients] node = A_node;
+    C B_node_client;
+    SW B_node_switch;
+    port_t out_port;
+    new_p = P[p];
+    out_port = out_port_of_rule_32(R[rule_index_best_match_32(new_p, A_node)]);
+
+    set_reached(new_p, node);
+
+    if(out_port != discard){
+        conn(node, out_port ); 
+        if(node_is_client(node)){ /* node == client */
+                B_node_client = node;
+            //    client_packet_received(new_p, B_node_client);
+        }
+        else if(node_is_switch(node)){ /* node is switch */
+                           B_node_switch = node;
+                           encode_bitfield(_in_port_, out_port, new_p);
+                           addpkt_32(new_p,B_node_switch);
+        }
+        else if(node == misconnection) {  /* Packet loss due to misconnection (the conn-function didn't find entry)  */
+
+        }
+    }
+    remove_pk_from_pq_32(p, A_node );
+}
+
+
+void proces_matched_pkts_32(pkts p, SW sw)
+{
+    forward_matched_pkt_32(p, sw);
+    if(all_pkts_1_shot == 1){
+        for(i : pkts)
+            if(packet_in_pb_32(i, sw) and rule_index_best_match_32(P[p], sw) == rule_index_best_match_32(P[i], sw) and p != i){
+                forward_matched_pkt_32(i, sw);
+            }
+        }
+}</declaration>
+		<location id="id2" x="0" y="0">
+		</location>
+		<init ref="id2"/>
+		<transition>
+			<source ref="id2"/>
+			<target ref="id2"/>
+			<label kind="select" x="-161" y="51">p : pkts</label>
+			<label kind="guard" x="-246" y="85">packet_in_pb_32(p, sw) &amp;&amp;
+!there_is_a_match_in_ft_32(P[p], sw)</label>
+			<label kind="assignment" x="-238" y="127">process_unmatched_packets_32(p, sw)</label>
+			<label kind="comments" x="34" y="68">TABLE-MISS</label>
+			<nail x="-25" y="68"/>
+			<nail x="17" y="102"/>
+		</transition>
+		<transition>
+			<source ref="id2"/>
+			<target ref="id2"/>
+			<label kind="select" x="-221" y="-221">p : pkts</label>
+			<label kind="guard" x="-289" y="-170">packet_in_pb_32(p, sw) &amp;&amp;
+there_is_a_match_in_ft_32(P[p], sw)</label>
+			<label kind="assignment" x="-229" y="-93">proces_matched_pkts_32(p, sw )</label>
+			<label kind="comments" x="51" y="-68">MATCH</label>
+			<nail x="0" y="-68"/>
+			<nail x="42" y="-68"/>
+		</transition>
+	</template>
+	<template>
+		<name>pIq</name>
+		<declaration>
+
+
+
+
+
+
+void remove_pk_from_pIq_32(pkts p, SW sw){   
+int i,j;
+        if(oo_pIOq != 1  
+                     //   or (oo_pIOq == 1 and !oo_alpha(Packets[p], sw) )
+                                                                        ){    	
+ 	        clear_bit(P[p], from_bit(_pIb_)+sw-first_switch ); 
+        }	
+}
+</declaration>
+		<location id="id3" x="-51" y="-68">
+		</location>
+		<init ref="id3"/>
+		<transition>
+			<source ref="id3"/>
+			<target ref="id3"/>
+			<label kind="select" x="-365" y="-255">p : pkts,
+sw: SW</label>
+			<label kind="guard" x="-374" y="-187">packet_in_pIb_32(p, sw)</label>
+			<label kind="assignment" x="-391" y="-127">controller_32(p,  sw),
+remove_pk_from_pIq_32(p, sw)</label>
+			<nail x="-281" y="-34"/>
+			<nail x="-281" y="-68"/>
+		</transition>
+	</template>
+	<template>
+		<name>pOq</name>
+		<parameter>const SW sw</parameter>
+		<declaration>void process_pOb(pkts p, SW sw){
+
+  int pt = out_port_of_packet_32(P[p]);
+
+    if(pt == flood){
+        flood_32(P[p], sw);
+    }
+    else{
+        forward_32(P[p], pt, sw);
+    }
+}
+
+
+void remove_pk_from_pOq_32(pkts p, SW sw){
+    if(oo_pIOq != 1){
+        clear_bit(P[p], from_bit(_pOb_)+sw-first_switch );
+    }
+}</declaration>
+		<location id="id4" x="0" y="0">
+		</location>
+		<init ref="id4"/>
+		<transition>
+			<source ref="id4"/>
+			<target ref="id4"/>
+			<label kind="select" x="-153" y="-153">p : pkts</label>
+			<label kind="guard" x="-144" y="-127">packet_in_pOb_32(p, sw)</label>
+			<label kind="assignment" x="-170" y="-59">process_pOb(p,  sw),
+remove_pk_from_pOq_32(p, sw)</label>
+			<nail x="-162" y="0"/>
+			<nail x="-162" y="85"/>
+		</transition>
+	</template>
+	<template>
+		<name>cq</name>
+		<parameter>const SW sw</parameter>
+		<declaration>void remove_rule_from_cq_32(rul r, SW sw){
+    if(oo_cq != 1){
+        clear_bit(R[r], from_bit(_cb_)+sw-first_switch );
+    }
+}
+
+
+void remove_rule_from_ft_32(rul r, SW sw){
+
+    clear_bit(R[r], from_bit(_ft_)+sw-first_switch );
+}
+</declaration>
+		<location id="id5" x="63" y="90">
+			<label kind="comments" x="-263" y="51">Α switch is allowed to arbitrarily reorder
+processing of control-plane messages;
+Here we process them nondeterministically.</label>
+		</location>
+		<init ref="id5"/>
+		<transition>
+			<source ref="id5"/>
+			<target ref="id5"/>
+			<label kind="select" x="102" y="153">r : rul</label>
+			<label kind="guard" x="93" y="170">rule_in_cb_32(r, sw)  &amp;&amp;
+rule_adds_flow_entry_32(r, sw) and
+!rule_installed_32(r, sw)</label>
+			<label kind="assignment" x="93" y="246">add_rule_to_ft_32(r, sw),
+remove_rule_from_cq_32(r, sw)</label>
+			<label kind="comments" x="178" y="127">INSTALL RULE</label>
+			<nail x="170" y="144"/>
+			<nail x="114" y="141"/>
+		</transition>
+		<transition>
+			<source ref="id5"/>
+			<target ref="id5"/>
+			<label kind="select" x="51" y="-161">r : rul</label>
+			<label kind="guard" x="34" y="-93">rule_in_cb_32(r, sw)  &amp;&amp;
+!rule_adds_flow_entry_32(r, sw) and
+rule_installed_32(r, sw)</label>
+			<label kind="assignment" x="85" y="-17">remove_rule_from_ft_32(r, sw),
+remove_rule_from_cq_32(r, sw)</label>
+			<label kind="comments" x="178" y="34">UNINSTALL RULE</label>
+			<nail x="170" y="34"/>
+			<nail x="119" y="34"/>
+		</transition>
+	</template>
+	<system>system undef, pqSw, pIq, pOq, cq;
+
+//system test;</system>
+	<queries>
+		<query>
+			<formula>A[] not collision
+			</formula>
+			<comment>
+			</comment>
+		</query>
+		<query>
+			<formula>A[] forall (s: SW) forall (p: pkts) !(packet_has_visited_switch(p,s) and packet_in_pb_32(p,s) )
+			</formula>
+			<comment>
+			</comment>
+		</query>
+		<query>
+			<formula>A[] forall (s: SW) forall (p: pkts) not (Packets[p].reached[s] and Packets[p].pq[s] )
+			</formula>
+			<comment>
+			</comment>
+		</query>
+		<query>
+			<formula>E&lt;&gt; p_cntr  == 16
+			</formula>
+			<comment>
+			</comment>
+		</query>
+		<query>
+			<formula>Pr[&lt;=100](&lt;&gt; p_cntr  &gt;= 15)
+			</formula>
+			<comment>
+			</comment>
+		</query>
+		<query>
+			<formula>A[] forall (p: pkts) not (P[p] == invariant_changed)
+			</formula>
+			<comment>
+			</comment>
+		</query>
+	</queries>
+</nta>

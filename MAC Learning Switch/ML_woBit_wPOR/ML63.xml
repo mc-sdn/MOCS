@@ -1,0 +1,1738 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE nta PUBLIC '-//Uppaal Team//DTD Flat System 1.1//EN' 'http://www.it.uu.se/research/group/darts/uppaal/flat-1_2.dtd'>
+<nta>
+	<declaration>const int Bound = 1;
+const int switches     =  6;
+const int clients      =  3;
+const int ports        =  3;  /* the max number of ports a switch in the topology in question might have */
+const int pqLength     =  24;
+const int cqLength     = 12;
+const int ftLength     = 12;
+//const int rules        =  3;
+const int timed_rules  =  2;
+
+/* 
+ *
+ *****************************************************************************************************************
+ *
+ *    SWITCHES
+ *
+ *****************************************************************************************************************
+ * 
+ */
+const bool oo_pq = 1; // this is the infinite abstraction
+const bool oo_pIOq = 0; // this is the infinite abstraction
+const bool oo_cq = 0; // this is the infinite abstraction
+const bool fwd_optimisation = 1;
+const bool ctrl_optimisation = 1;
+const bool stateful_controller = 0;
+
+const bool all_pkts_1_shot = 0;
+
+
+
+//typedef int[1,consistent] constist_rules;
+typedef int[1,timed_rules] t_rules;
+
+typedef int[0,switches-1] SW0; /* Set of all switches (bounded integer) */
+typedef int[0,clients-1] C0;   /* Set of all clients */
+
+
+typedef int[5000,4999+switches] SW; /* Set of all switches (bounded integer) - shifted */
+typedef int[6000,5999+clients] C;   /* Set of all clients -shifted */
+typedef int[4999,5999+clients] mis_SW_C; /* All nodes: clients, switches and the misconn */
+//typedef int[-22,5999+clients] big_int; /* The default range of an integer is [-32768, 32767], so, we expand */
+typedef int[-22,10] priority_t;
+typedef int[-22,ports] port_t;
+typedef int[1,ports] phys_ports;
+
+
+const int first_switch   = 5000;
+const int last_switch   = 4999 + switches;
+const int mid_switch    = 5000 + switches/2;
+const int first_client   = 6000;
+const int last_client   = 5999 + clients;
+
+//int hasty_cntr;
+//bool ovlp[SW][cqLength];
+//bool pkt_generated[SW][int[0,1]][phys_ports];
+//bool pk_processed = true; /* This is a wait flag: hasty process should wait for the pk to be processed by the Gearbox   */
+
+//clock consistent_c[int[1,rules]]; /* When a rule is installed first time in the network &amp;&amp; the rule is flagged, this clock is reset  */
+//clock rule_processing_c[SW]; /* we use this clock to model the delay of rule processing from the switch  */
+//clock now; /* In order to record the total amount of time that has elapsed, we introduce a global clock now , which is never reset. */
+
+//clock hard_timeout_c[SW][int[1,rules]];
+//clock idle_timeout_c[SW][int[1,rules]];
+                                        
+
+
+
+/* 
+ *
+ *****************************************************************************************************************
+ *
+ *  packets_added_in_pq[SW] =   packets_forwarded_to_client[SW][..] 
+ *                            + packets_dropped[SW]
+ *                            + packets_forwarded_to_switch[SW][..]
+ *                              --------------------------------------- the below (pq/pIN/pOUT)bufferlevel packet
+ *                              --------------------------------------- are those in queue waiting to be served 
+ *                            + pqswbufferlevel[SW]
+ *                            + pIN_bufferlevel(pkt.sw == SW)
+ *                            + pOUT_bufferlevel[SW]
+ *
+ *****************************************************************************************************************
+ * 
+ */
+
+//int packets_added_in_pq[SW];
+// int packets_forwarded_to_switch[SW][SW];
+//int packets_forwarded_to_client[C];
+// int packets_dropped[SW];
+// int hit_idle_timed_rule_cntr;  /* a hit causes the idle time to reset */
+
+
+
+const int undefined_pkt = -22;
+const int wildcarded    = - 2;  /* -2 encodes the fact that field is undefined (wildcard, all-x), and as such any packet ingress port matches this rule's value field. */
+const int undefined     = - 2;
+const int discard       = - 1;  /* -1 encodes the drop action */
+const int recipient_missing = -1; /* recipient_missing from MAC table */
+const int null          =   0;
+const int misconnection       = 4999;
+const int client_port   =   1;
+
+//SW sw_with_left_hasty_pkts;
+//bool hasty_packets_left;
+//chan hit;
+/*
+urgent broadcast chan go[SW], hasty_match_rule_wise[SW], hasty_match_packet_wise[SW], dequeue_hasty_p[SW];
+urgent broadcast chan enqueue_to_pq[SW], dequeue_from_pq[SW], process_cq[SW];
+urgent broadcast chan proc_random_rule[SW], enqueue_to_pIq, dequeue_from_pIq, enqueue_to_pOq[SW], dequeue_from_pOq[SW], pkt_generator[SW], discard_packet[SW];
+urgent broadcast chan next_hop[mis_SW_C], next_hop_hasty[mis_SW_C], inst_rule[SW], uninst_rule[SW], other_matching_packets[SW], other_hasty_packets[SW];
+*/
+
+
+
+
+
+typedef bool set_t[SW]; 
+
+typedef port_t mac_table_t[C];  /* an array of switch port_t */
+typedef mac_table_t mac_control_state_t[SW];  /* array of mac_table_t */
+
+mac_control_state_t mac_control_state;
+
+
+
+/* the packet tuple */
+typedef struct
+{  
+  port_t in_port;              /* ingress port */
+  int[-22,4999+switches] sw;    /* used to sent the PACKET-OUT message on the connection where the PACKET-IN came from. */
+  port_t out_port;             /* output port, relevant for PACKET-OUT message and used from the flow pipeline to send the packet on (using the output action) */
+  int[-22,5999+clients] src;
+  int[-22,5999+clients] dest;
+  set_t reached;
+//  bool hasted;
+//  bool defined;
+} packet_t;
+
+// packet_t pk; /* this is updated each time a pkt is transfered to other queue */
+// SW orig_sw;
+// int[0,pqLength-1] pk_i; /* The pk index to be removed */
+
+
+
+//packet_t pktrandom = {-22,0,-22,-22,0,0};
+
+
+// typedef packet_t packet_queue_t[pqLength];
+
+packet_t packet_queue[SW][pqLength];
+packet_t PACKET_IN_queue[pqLength * switches]; /* the request queue (rq) */
+packet_t PACKET_OUT_queue[SW][pqLength];       /* the forward queue (fq) */
+
+
+/* the rule template as a tuple */
+typedef struct
+{
+//  int rule_id;
+  int[-22,5999+clients] src;
+  int[-22,5999+clients] dest;
+  port_t in_port ;         
+  port_t out_port ;        
+  priority_t prio ;               /* default field */
+ // bool timeout ;                  /* default field */
+ // int[0, 65535] hard_timeout ;    /* Number of seconds before expiration. */
+ // int[0, 65535] idle_timeout ;    /* Number of seconds idle before expiration. */
+ // bool consist ;
+  bool install ;                  /* default field */
+} rule_t ;
+
+//rule_t this_rule;
+// rule_t matching_rule;  /* the matching flow entry */
+
+
+//rule_t controller_rules[rul];  /* the array of rules in controller */
+
+
+/*  the fill levels for the queues */
+      
+//int [0,pqLength * switches] pIN_bufferlevel;   
+//int [0,pqLength] pOUT_bufferlevel[SW];
+//int [0,cqLength] cqbufferlevel[SW];
+//int [0,ftLength] ftbufferlevel[SW];
+
+
+
+//typedef rule_t rules_t[cqLength];
+
+
+rule_t flow_table[SW][ftLength];  /* the array of installed rules in the switch, i.e. the flow table ft */
+rule_t control_queue[SW][cqLength]; /* the array of current rules in the cq */
+
+
+/*
+typedef struct
+{
+  packet_queue_t packet_queue;
+  PACKET_OUT_queue_t PACKET_OUT_queue;
+  rules_t control_queue;
+  rules_t flow_table;
+} switch_t ;
+
+switch_t switches[SW];
+*/
+
+
+
+int normalise_sw(int swi)
+{
+SW sw;
+    if(swi &gt;= 5000){  /* as pk.sw takes negative values (-22), it can't be accepted as index - so we bound it here */
+        sw = swi;
+    }
+return sw;
+}
+
+
+
+int normalise_timed_rule_id(int ruleid)
+{
+t_rules t_ruleid ;
+
+    if(ruleid &gt;= 1 &amp;&amp; ruleid &lt;= timed_rules){ 
+        t_ruleid = ruleid;
+    }
+return t_ruleid;
+}
+
+
+
+
+int buffer_level_pq(SW sw)
+{
+int i = 0;
+    while (i &lt; pqLength and packet_queue[sw][i].sw != undefined_pkt) 
+    {
+        i++;
+    }
+return i;
+}
+
+
+int buffer_level_pINq()
+{
+int i = 0;
+    while (i &lt; pqLength * switches and PACKET_IN_queue[i].sw != undefined_pkt) 
+    {
+        i++;
+    }
+return i;
+}
+
+
+
+int buffer_level_pOUTq(SW sw)
+{
+int i = 0;
+    while (i &lt; pqLength and PACKET_OUT_queue[sw][i].sw != undefined_pkt) 
+    {
+        i++;
+    }
+return i;
+}
+
+
+
+bool oo(packet_t p1, packet_t p2){
+       return(       (p1.in_port  == undefined_pkt  || p1.in_port  ==  p2.in_port)     and
+                     (p1.dest     == undefined_pkt  || p1.dest     ==  p2.dest   )     and
+                     (p1.src      == undefined_pkt  || p1.src      ==  p2.src    )     and
+                     forall(s : SW)
+                         p1.reached[s]  ==  p2.reached[s]         
+        );
+}
+
+
+bool oo_alpha(packet_t pk){
+
+       return( forall (s : SW)  
+                
+            (pk.reached[s] == 0)  
+              
+        );
+}
+
+
+
+bool same_packet_pq(packet_t p, SW sw)
+{
+    return( exists (i :  int[0, pqLength-1]) /* packet_queue[sw][i] == packet */
+                                              oo(packet_queue[sw][i], p) and
+                                               i &lt; buffer_level_pq(sw)         );    
+}
+
+
+
+bool same_packet_pinq(packet_t p)
+{
+
+    return( exists (i :  int[0, pqLength * switches -1]) /* PACKET_IN_queue[i] == packet */
+                                              oo(PACKET_IN_queue[i], p) and
+                                              PACKET_IN_queue[i].sw       == p.sw        and
+                                              i &lt; buffer_level_pINq()     
+      );    
+}
+
+
+bool same_packet_poutq(packet_t p, int swi)
+{
+
+SW sw;
+    if(swi &gt;= 5000){  /* because pk.sw takes negative values (-22) it can't be accepted as index - so we bound it here */
+        sw = swi;
+    }
+
+    return( exists (i :  int[0, pqLength-1]) /* PACKET_OUT_queue[sw][i] == packet  */
+                                              oo(PACKET_OUT_queue[sw][i], p) and
+                                              i &lt; buffer_level_pOUTq(sw)     
+   );    
+}
+
+
+
+
+
+
+
+int buffer_level_cq(SW sw)
+{
+int i = 0;
+    while (i &lt; cqLength and control_queue[sw][i].prio != undefined and control_queue[sw][i].prio != 0) 
+    {
+        i++;
+    }
+return i;
+}
+
+
+/*
+ * in order to keep only one ordering in the ft, the rules are installed not at the end slot
+ * but according to the controller ordering.
+ */
+int buffer_level_ft(SW sw)
+{
+int i, j;
+
+    for(i : int[0,ftLength-1]){
+        if(flow_table[sw][i].prio != undefined and flow_table[sw][i].prio != 0){
+            j++;
+        }
+    }
+return j;
+}
+
+
+
+
+/* This function stores packets to pq of sw. It is the enqueue_data procedure in Kuai code.
+ * The expression in if statement, just says that if there's no same packet queued then enqueue the new one.
+ * =============================
+ * packet_queue[i].port = wildcarded --&gt; means that there is a packet packet_queue[i] whose header field "port" is undefined, 
+ */
+
+void addpkt(packet_t pkt, SW sw){  
+/*
+int i;
+      if(pqswbufferlevel[sw] == 0){   /* this is the case the queue is empty 
+       packet_queue[sw][pqswbufferlevel[sw]] = pkt;
+       pqswbufferlevel[sw]++;
+       packets_added_in_pq[sw]++;
+    }
+    else{       
+ */
+        if(            !same_packet_pq(pkt,sw)
+                 //   &amp;&amp; !same_packet_poutq(pkt,sw)           /* pkt currently being served */
+                 //   &amp;&amp; !same_packet_pinq(pkt,sw)
+                 //   &amp;&amp; pkt.defined != undefined_pkt          
+                                                     ){
+
+                    if(buffer_level_pq(sw) &lt; pqLength - 1 ){
+
+                           packet_queue[sw][buffer_level_pq(sw)] = pkt;
+                        //   pqswbufferlevel[sw]++;
+                      //     packets_added_in_pq[sw]++;  /* if there's a loop in the topology, then this counter may fill and an error is returned */
+                    }
+
+ //                   !( packet_queue[sw][i].in_port == pkt.in_port &amp;&amp;
+ //                      packet_queue[sw][i].ssh  == pkt.ssh       )
+                                    
+                       
+               
+            }                                                          
+ //   }
+}
+
+
+
+
+
+void PACKET_IN(packet_t pkt){  /* send a table-miss packet to the controller (PACKET_IN_queue) */
+
+       PACKET_IN_queue[buffer_level_pINq()] = pkt;
+       
+
+}
+
+
+
+void undefine_packet(packet_t &amp;packetX){
+
+    packetX.sw       = undefined_pkt;
+    packetX.in_port  = undefined_pkt;
+    packetX.out_port = undefined_pkt;
+    packetX.src  = undefined_pkt;
+    packetX.dest = undefined_pkt;
+}
+
+
+void zero_rule(rule_t &amp;ruleX){
+
+    ruleX.in_port  = 0;
+    ruleX.out_port = 0;
+    ruleX.prio     = 0;
+   // ruleX.hard_timeout = 0;
+   // ruleX.idle_timeout = 0;
+   // ruleX.timeout = false;
+    ruleX.install = false;
+}
+
+
+
+void undefine_rule(rule_t &amp;ruleX){
+
+    ruleX.in_port   = wildcarded;
+    ruleX.out_port  = wildcarded;
+    ruleX.src       = wildcarded;
+    ruleX.dest      = wildcarded;
+
+    ruleX.prio = undefined;
+   // ruleX.timeout = false;
+    ruleX.install = false;
+}
+
+
+void init_rule(rule_t &amp;ruleX){ /* gives default values to fields that should be defined */
+
+    ruleX.out_port = discard;
+    ruleX.prio = 1;
+   // ruleX.timeout = false;
+    ruleX.install = true;    
+}
+
+
+
+
+
+
+bool same_rules(rule_t r1, rule_t r2) 
+{
+    return(
+
+    r1.prio != undefined &amp;&amp; r2.prio != undefined          &amp;&amp;
+
+
+    (r1.dest == wildcarded imply r2.dest == wildcarded)           &amp;&amp;    
+    (r2.dest == wildcarded imply r1.dest == wildcarded)           &amp;&amp; 
+
+    (r1.src == wildcarded imply r2.src  == wildcarded)           &amp;&amp;    
+    (r2.src == wildcarded imply r1.src  == wildcarded)           &amp;&amp; 
+
+    (r1.in_port == wildcarded imply r2.in_port == wildcarded)   &amp;&amp;
+    (r2.in_port == wildcarded imply r1.in_port == wildcarded)   &amp;&amp; 
+
+    (!r1.dest    == wildcarded imply r1.src     == r2.src)           &amp;&amp; 
+    (!r1.src     == wildcarded imply r1.src     == r2.src)           &amp;&amp;
+    (!r1.in_port == wildcarded imply r1.in_port == r2.in_port)       &amp;&amp; 
+
+    (r1.out_port == r2.out_port)                                &amp;&amp;
+    (r1.prio == r2.prio)                                        &amp;&amp; 
+    (r1.install == r2.install) 
+
+                                                ) ;
+}
+
+
+
+
+/* Two flow entries overlap if a single packet may match both, and both entries have the same priority. 
+ * this happens if a field is undefined for one rule and defined for another
+ * coz undefined (omitted) fields are wildcards (having value ANY): we say field is wildcarded (not present)
+ */
+
+bool overlapping_rules(rule_t r1, rule_t r2)
+{
+    return(
+            (r1.prio!= undefined &amp;&amp; r2.prio != undefined              &amp;&amp;
+               !( 
+                (r1.dest  == wildcarded imply r2.dest  == wildcarded)        &amp;&amp;
+                (r2.dest  == wildcarded imply r1.dest  == wildcarded)        &amp;&amp;  
+
+                (r1.src   == wildcarded imply r2.src   == wildcarded)        &amp;&amp;
+                (r2.src   == wildcarded imply r1.src   == wildcarded)        &amp;&amp;  
+  
+                (r1.in_port == wildcarded imply r2.in_port == wildcarded)    &amp;&amp;
+                (r2.in_port == wildcarded imply r1.in_port == wildcarded)        
+                )                                                            
+            )                                               
+          );
+}
+
+
+
+int free_slot_ft(SW sw)
+{
+int i = 0;
+    while (i &lt; ftLength and flow_table[sw][i].prio != undefined and flow_table[sw][i].prio != 0) 
+    {
+        i++;
+    }
+return i;
+}
+
+int free_slot_cq(SW sw)
+{
+int i = 0;
+    while (i &lt; cqLength and control_queue[sw][i].prio != undefined and control_queue[sw][i].prio != 0) 
+    {
+        i++;
+    }
+return i;
+}
+
+
+
+/* this adds control messages (rules) and barriers to the cqs of the switches 
+ * if no same rule exists in either cq or ft
+ * (addCtrlCmd-operation which is called by the ctrl-action in Kuai)
+ */
+
+
+void send_rule(rule_t which_rule, SW sw){
+int i;
+
+  if(buffer_level_cq(sw) == 0 &amp;&amp; buffer_level_ft(sw) == 0){   // this is the case the queues are empty
+       control_queue[sw][0] = which_rule;
+  }
+    else{       
+            if (forall(i : int[0,cqLength-1])      
+                        !(same_rules(control_queue[sw][i],which_rule)  ||
+                          same_rules(flow_table[sw][i],which_rule)       )
+
+                                                                                                                             )  {
+                               control_queue[sw][free_slot_cq(sw)] = which_rule;
+            } 
+    }
+}
+
+
+
+
+int RuleIndex_cq(rule_t rule, SW sw)
+{
+int i = 0;
+
+    while(i &lt; cqLength and control_queue[sw][i] != rule)
+    {
+            i++;
+    }
+return i;
+}
+
+
+
+int RuleIndex_ft(rule_t rule, SW sw)
+{
+int i = 0;
+    while(i &lt; ftLength and flow_table[sw][i] != rule)
+    {
+         i++;
+    }
+return i;
+}
+
+
+
+
+
+
+bool this_rule_already_installed_somewhere(rule_t rule) {
+
+    return (exists(r: int[0,ftLength-1]) exists(sw:SW)
+                    same_rules(flow_table[sw][r], rule ) );
+}
+
+
+//bool installed_everywhere[int[1,rules]];
+
+
+bool this_rule_installed_everywhere(rule_t rule) {
+
+    return forall(sw:SW) exists(r: int[0,ftLength-1]) 
+                    same_rules(flow_table[sw][r], rule )   &amp;&amp;
+                    flow_table[sw][r].prio != undefined                        ;
+}
+
+
+
+
+
+
+/* this function installs a rule (adds it in the ft and remove it (the control message CM={add(r)}) from the cq).
+ * It is the add-action (by addRule-operation) in Kuai 
+ *
+ * If an overlap conflict exists between an existing flow
+ * entry and the add request, the switch must refuse the addition and respond with an ofp_error_msg
+ * with OFPET_FLOW_MOD_FAILED type and OFPFMFC_OVERLAP code.
+ */
+
+void install_rule(rule_t rule, SW sw){
+int i,j;
+    if(buffer_level_cq(sw) &gt; 0){
+          for(i = RuleIndex_cq(rule, sw);  i &lt; cqLength -1; i++){ 
+              control_queue[sw][i] = control_queue[sw][i+1];
+          }
+          for(i = buffer_level_cq(sw); i &lt; cqLength; i++){
+          undefine_rule(control_queue[sw][i]);
+          }         
+
+          if (forall(i : int[0,ftLength-1]) 
+                        (!same_rules(flow_table[sw][i],rule)  ) ){
+                         /* start flow entry removal timer
+                       
+                                    if(rule.hard_timeout &gt; 0 ){
+                                        hard_timeout_c[sw][rule.rule_id] = 0;
+                                    }
+                                    if(rule.idle_timeout &gt; 0 ){
+                                        idle_timeout_c[sw][rule.rule_id] = 0;
+                                    }                        
+                         */
+                             flow_table[sw][buffer_level_ft(sw)] = rule;  /* add to the end of ft */
+
+          }
+      
+    }
+}
+
+
+
+/* the 'del'-action in Kuai by the delRule-operation: - 
+ * includes the removal, by the controller, of [[del(r)]]-message from the cq &amp; the removal of {r} from the ft
+ */
+
+void uninstall_rule(rule_t rule, SW sw){
+int i,j;
+      for(i = 0;  i &lt; ftLength; i++){
+          if(same_rules(flow_table[sw][i],rule)  ){
+
+             for(j = i;  j &lt; ftLength -1; j++) { 
+                  flow_table[sw][j] = flow_table[sw][j+1];
+              }
+            //  hard_timeout_c[sw][normalise_timed_rule_id(rule.rule_id)] = 0;
+            //  idle_timeout_c[sw][normalise_timed_rule_id(rule.rule_id)] = 0;
+
+              for(j = buffer_level_ft(sw); j &lt; ftLength; j++){
+                  undefine_rule(flow_table[sw][j]);
+              }
+
+              for(j = RuleIndex_cq(rule, sw);  j &lt; cqLength -1; j++){ 
+                  control_queue[sw][j] = control_queue[sw][j+1];
+              }
+              for(j = buffer_level_cq(sw); j &lt; cqLength; j++){
+                  undefine_rule(control_queue[sw][j]);
+              }         
+          }
+      }
+}
+
+
+/* removal by the flow expiry mechanism: 
+ * the clock constraints are entered in the automaton
+ */
+/*
+void remove_expired_flow_entry(rule_t rule, SW sw){
+ int i,j;
+    if (rule.hard_timeout &gt; 0 || rule.idle_timeout &gt; 0){
+
+        i = RuleIndex_ft(rule, sw);
+
+              for(j = i;  j &lt; ftLength -1; j++) { 
+                  flow_table[sw][j] = flow_table[sw][j+1];
+              }
+
+              ftbufferlevel[sw]--;
+
+              hard_timeout_c[sw][rule.rule_id] = 0;
+              idle_timeout_c[sw][rule.rule_id] = 0;
+
+              for(j = ftbufferlevel[sw]; j &lt; ftLength; j++){
+                  undefine_rule(flow_table[sw][j]);
+              }
+
+    }
+}
+
+*/
+
+
+
+bool node_is_client(int[4999,5999+clients] node){
+    return(
+            node &gt;= 6000 &amp;&amp; node &lt; 6000+clients
+          );
+}
+
+bool node_is_switch(int[4999,5999+clients] node){
+    return(
+            node &gt;= 5000 &amp;&amp; node &lt; 5000+switches
+          );
+}
+
+
+
+/* this is a ring topology: each node connects to exactly two other nodes (port 3 of sw to port 2 of sw+1). 
+   Ports 1 connects the hosts with the switches: 5xxx &lt;-&gt; 6xxx 
+
+   To simulate a loop, remove the Kuai branch and set switches = 2
+*/
+
+ 
+void conn(int[4999,5999+clients] &amp;node, port_t &amp;port){
+
+
+  int[4999,5999+clients] adjacent_n = misconnection;
+  phys_ports adjacent_n_p;
+
+
+             if    (node == first_switch  &amp;&amp; port == 1) { adjacent_n = 6000;  adjacent_n_p = client_port    ;    }
+        else if    (node == mid_switch    &amp;&amp; port == 3) { adjacent_n = 6001;  adjacent_n_p = client_port    ;    }
+        else if    (node == last_switch   &amp;&amp; port == 2) { adjacent_n = 6002;  adjacent_n_p = client_port    ;    }
+
+        else if    (node != last_switch   &amp;&amp; port == 2) { adjacent_n = node+1;  adjacent_n_p = 1              ;    }
+        else if    (node != first_switch  &amp;&amp; port == 1) { adjacent_n = node-1;  adjacent_n_p = 2              ;    }
+
+        else if    (node == 6000 ) { adjacent_n = first_switch;  adjacent_n_p = 1    ;    }
+        else if    (node == 6001 ) { adjacent_n = mid_switch;    adjacent_n_p = 3    ;    }
+        else if    (node == 6002 ) { adjacent_n = last_switch;   adjacent_n_p = 2    ;    }
+
+    node = adjacent_n;
+    port = adjacent_n_p;
+    
+}
+
+
+bool can_communicate(C l_client, C r_client)
+{
+
+    bool c2c[C][C];
+
+    c2c[6000][6001] = true;
+    c2c[6001][6002] = true;
+    c2c[6002][6000] = true;
+
+    return c2c[l_client][r_client];
+
+}
+
+
+int switch_of_client(int[4999,5999+clients] c){
+  port_t port_c;       
+
+        conn(c, port_c);
+  
+  return c;       
+}
+
+
+
+int switch_client_conn(SW sw, C c){
+  port_t j;
+  bool sw_c;  
+  int[4999,5999+clients] A_node = sw ;
+  int[4999,5999+clients] B_node;
+       
+    for(i : phys_ports) {
+
+        j = i;
+
+        conn(A_node, j);
+
+        B_node = A_node;
+
+        if(B_node == c){
+    
+            sw_c = true;
+        }
+        A_node = sw;
+    }
+  return sw_c;       
+}
+
+
+
+
+
+
+/* the arrival of an, say, protocol_of_interest == Telnet packet to the client violates the specification, thus invariant_failed = true;
+ */
+void client_packet_received(packet_t packet, C which_client){
+}
+
+void client_send_packet(C src, C dest){
+packet_t packet;
+
+port_t cl_port;
+
+int[4999,5999+clients] client = src;
+int[4999,5999+clients] sw_of_client;
+phys_ports sw_p_of_client;
+
+    conn(client, cl_port);
+
+        sw_of_client = client;
+        sw_p_of_client = cl_port;
+
+      packet.src = src;
+      for (s: SW){
+        packet.reached[s] = false;
+      }
+      packet.dest = dest;
+      packet.in_port = sw_p_of_client;
+      packet.sw = switch_of_client(src);
+
+      addpkt(packet, sw_of_client);
+}
+
+void start_all_clients(){
+packet_t packet;
+
+  for (src: C){
+    for (dest: C){
+      if (can_communicate(src, dest)){
+        client_send_packet(src, dest);
+      }
+    }
+  }
+}
+
+
+
+
+
+
+void forward(packet_t packet, port_t out_port, int[4999,5999+clients] A_node ){
+    packet_t new_p;
+    int[4999,5999+clients] node = A_node;
+    C B_node_client;
+    SW B_node_switch;
+    new_p = packet;
+
+    new_p.reached[node] = true;
+    conn(node, out_port); 
+    if(out_port != discard){
+
+        if(node_is_client(node)){ /* node == client */
+                B_node_client = node;
+                client_packet_received(new_p, B_node_client);
+        }
+        else if(node_is_switch(node)){ /* node is switch */
+                           B_node_switch = node;
+ 						   new_p.sw = B_node_switch;
+ 						   new_p.in_port = out_port;
+                           new_p.out_port = undefined_pkt; // this is needed only for the pOq cause we have set the out_port
+                           addpkt(new_p,B_node_switch);
+        }
+        else if(node == misconnection) {  /* Packet loss due to misconnection (the conn-function didn't find entry)  */
+
+        }
+    }
+}
+
+
+
+void delete_PACKET_IN(packet_t packet){
+int i = 0;
+int j;
+int buffer_level = buffer_level_pINq();
+
+    while(i &lt; buffer_level and PACKET_IN_queue[i] != packet){
+        i++;
+    }
+            for(j = i; j &lt; buffer_level-1; j++){
+                PACKET_IN_queue[j] = PACKET_IN_queue[j+1];
+            }
+            for(j = buffer_level_pINq(); j &lt; pqLength * switches; j++){
+                    undefine_packet(PACKET_IN_queue[j]);
+            }
+}
+
+
+
+
+void delete_PACKET_OUT(packet_t packet, SW sw){
+int i = 0;
+int j;
+int buffer_level = buffer_level_pOUTq(sw);
+
+    while(i &lt; buffer_level and PACKET_OUT_queue[sw][i] != packet){
+        i++;
+    }
+            for(j = i; j &lt; buffer_level-1; j++){
+                PACKET_OUT_queue[sw][j] = PACKET_OUT_queue[sw][j+1];
+            }
+            for(j = buffer_level_pOUTq(sw); j &lt; pqLength; j++){
+                    undefine_packet(PACKET_OUT_queue[sw][j]);
+            }
+}
+
+
+void flood(packet_t packet, SW sw){
+    for(i : phys_ports){
+        if(i != packet.in_port &amp;&amp; i != discard){  /* All physical ports except input port and the symbolic 'discard' one. */
+        forward(packet, i, sw);
+        }
+    }
+}
+
+/* this function checks in the cq if the rule is to be installed [add{r}] or uninstalled [del{r}]
+ * and calls the install/uninstall operation
+ */
+void act_on_control_queue_rule(rule_t r, SW sw){
+  if(r.install &amp;&amp; r.prio != undefined){
+    install_rule(r, sw);
+  }
+  else if(!r.install &amp;&amp; r.prio != undefined){
+    uninstall_rule(r, sw);
+  }
+}
+
+
+
+
+
+/* flushes out all control messages up to the last barrier, per each switch atomically.
+ * 
+ */
+void barrier(SW sw){
+
+        while(control_queue[sw][0].prio != undefined){
+
+                         act_on_control_queue_rule(control_queue[sw][0], sw);
+        }                   
+}
+
+
+
+                
+/* A packet matches a flow table entry if the values in the packet match fields used for the lookup match
+ * those defined in the flow table entry. If a flow table entry field has a value of ANY (field omitted), it
+ * matches all possible values in the header.
+ */
+bool matched(packet_t packet, rule_t rule)
+{
+	return(     rule.prio != undefined
+            &amp;&amp;  packet.sw != undefined_pkt
+            &amp;&amp; (rule.dest      == wildcarded || rule.dest     == packet.dest)                
+            &amp;&amp; (rule.src       == wildcarded || rule.src      == packet.src)                
+            &amp;&amp; (rule.in_port   == wildcarded || rule.in_port  == packet.in_port)   
+    ) ;
+}
+
+
+
+bool there_is_a_match_in_ft(packet_t packet, SW sw)
+{
+	return(  exists(i : int[0,ftLength-1])  
+                i &lt; buffer_level_ft(sw)
+             &amp;&amp; matched(packet, flow_table[sw][i]) 
+    ) ;
+}
+
+/* Check whether there is ANY ft-match for packets in the pq of switch sw 
+ */
+bool there_is_a_matching_pkt_ft(SW sw)
+{
+
+	return(  exists(i : int[0,pqLength-1])  exists(j : int[0,ftLength-1])   
+
+                matched( packet_queue[sw][i], flow_table[sw][j])
+             ) ;
+
+}
+
+
+/* Check whether there is a packet in the pq which matches rule r 
+ */
+bool there_is_a_matching_pkt(SW sw, rule_t rule)
+{
+
+	return(  exists(i : int[0,pqLength-1])   
+
+                i &lt; buffer_level_pq(sw)
+             &amp;&amp; matched( packet_queue[sw][i], rule)
+             ) ;
+}
+
+
+bool higher_prio_rule_in_cq(SW sw, rule_t rule)
+{
+
+	return(  exists(i : int[0,cqLength-1])   
+
+                i &lt; buffer_level_cq(sw)
+            &amp;&amp;  control_queue[sw][i].prio &gt; rule.prio
+             ) ;
+}
+
+
+
+
+
+
+/* Check whether there is any cq-match of higher priority for packets in the pq of switch sw 
+ * or any del_rule removing the match one from the ft
+ */
+bool there_is_a_matching_pkt_cq(SW sw)
+{
+
+	return(  exists(i : int[0,pqLength-1])   exists(j : int[0,cqLength-1])     
+                matched( packet_queue[sw][i], control_queue[sw][j])
+          ) ;
+
+}
+
+
+
+
+void rule_action(packet_t packet, rule_t rule, SW sw){
+packet_t new_p;
+new_p = packet;
+    new_p.reached[sw] = true;
+
+    if(rule.out_port != discard){   
+        forward(new_p, rule.out_port, sw);
+    }
+}
+
+
+
+
+void packet_action(packet_t packet, SW sw){
+
+    if(packet.out_port != discard){   
+        forward(packet, packet.out_port, sw);
+    }
+}
+
+
+
+
+bool fwd_is_visible_32(packet_t p, port_t out_port, int[4999,5999+clients] A_node ) {
+    int[4999,5999+clients] s = A_node;
+    conn(s,out_port); 
+
+    return (node_is_switch(s) and p.reached[s]) ;
+
+}
+
+bool ctrl_is_visible(packet_t p, SW sw ) {
+ 
+    return false;
+}
+
+void enqueue_to_pOUTq(packet_t pkt, SW sw){
+
+      if(!same_packet_poutq(pkt, sw)){
+           
+           PACKET_OUT_queue[sw][buffer_level_pOUTq(sw)] = pkt;
+      }
+}
+
+bool valid_switch_port(int[4999,5999+clients] sw, port_t p){
+  int[4999,5999+clients] A_node = sw ;
+  int[4999,5999+clients] B_node;
+        conn(A_node, p);
+        B_node = A_node;
+  return B_node != misconnection;
+}
+
+void addpktOUT(packet_t p, SW sw){
+
+      if(!same_packet_poutq(p, sw)){
+           
+           PACKET_OUT_queue[sw][buffer_level_pOUTq(sw)] = p;
+      }
+}
+
+/*
+ * ========================================================================================
+ *                                                                     
+ *   CONTROLLER PROGRAM
+ *
+ * ========================================================================================
+ */
+
+void controller(packet_t packet, SW sw){
+
+    rule_t this_rule;
+    packet_t pk = packet;
+    mac_table_t mac_table;
+    port_t outport;
+    
+
+    C packet_src;
+    C packet_dest;
+    if(packet.src &gt;= 5000){  /* because packet.src takes negative values (-22) it can't be accepted as index - so we bound it here */
+        packet_src = packet.src;
+    }
+    if(packet.dest &gt;= 5000){
+        packet_dest = packet.dest;
+    }
+    
+
+    init_rule(this_rule);
+    mac_table = mac_control_state[sw];
+    mac_control_state[sw][packet_src] = packet.in_port; /* Here, we store in the controller 
+                                                         * the switch-port from the sender 
+                                                         * MAC-address are encoded as 6XX*/
+    outport = mac_table[packet_dest]; /* the switch-port of the recipient */
+
+  if (outport &gt; 0){    /* means that the the receiver’s location is already known */
+    if (outport != packet.in_port){
+      this_rule.src = packet.src;
+      this_rule.in_port = packet.in_port;
+  	  this_rule.dest = packet.dest;
+  	  this_rule.out_port = outport;
+  	  send_rule(this_rule, sw);
+      
+            if(fwd_optimisation == 1 and not fwd_is_visible_32(packet, outport, sw) ){
+                forward(packet, outport, packet.sw);
+            }
+            else{
+                pk.out_port = outport;
+                enqueue_to_pOUTq(pk, sw);
+
+            }
+    } 
+  }
+  else {     /* the controller doesn't know the switch-port of the recipient */
+      // flood(packet, packet.sw);
+        /*  flooding */
+        for(i : phys_ports){
+            if( (i != packet.in_port) and (i != discard)  and valid_switch_port(sw, i)  ){  /* All valid physical ports except input port and the symbolic 'discard' one. */
+                if(fwd_optimisation == 1 and not fwd_is_visible_32(packet, i, sw) ){
+                    forward(packet, i, sw);
+                }
+                else{
+                    pk.out_port = i;
+                    addpktOUT(pk, sw);
+                }
+            }
+        }
+    }
+}
+
+/*
+ * ========================================================================================
+ * ========================================================================================
+ */
+
+
+
+
+/*
+
+
+void addpktIN(packet_t p){
+
+	if(!same_packet_pinq(p)){
+    		PACKET_IN_queue[buffer_level_pINq()] = p;
+	}
+}
+
+*/
+
+
+
+
+
+void process_Packet_Out(SW sw){  /* this is the fwd action of Kuai */
+int i,j;
+int pout_init_fill_level = buffer_level_pOUTq(sw);
+
+//	while(PACKET_OUT_queue[sw][0].defined == true){
+		    
+			packet_action(PACKET_OUT_queue[sw][0], sw);
+            
+ 	        for(j = 0; j &lt; buffer_level_pOUTq(sw); j++){           
+                PACKET_OUT_queue[sw][j] = PACKET_OUT_queue[sw][j+1];
+            }
+           // pOUT_bufferlevel[sw]--;
+
+            for(j = buffer_level_pOUTq(sw); j &lt; pqLength; j++){
+                    undefine_packet(PACKET_OUT_queue[sw][j]);
+            }
+//	}
+}
+
+
+
+
+
+
+/* returns the highest priority whose rule matches the packet to be forwarded
+ *** The packet is matched against the table and only the highest priority flow entry that matches the
+ *** packet must be selected. 
+ */
+priority_t highest_priority_match(packet_t packet, SW sw){
+priority_t max = 0;
+priority_t current_priority;
+int i;
+    for(i = 0;  i &lt; ftLength; i++){
+      if(matched(packet, flow_table[sw][i])){
+        current_priority = flow_table[sw][i].prio;
+            if(max &lt; current_priority){
+                max = current_priority;
+            }
+      }
+    }
+return(max);
+}
+
+
+
+
+
+/* returns the the highest priority rule index whose pattern matches the packet in switch sw’s flow table. */ 
+int rule_index_best_match(packet_t packet, SW sw){
+priority_t current_priority;
+int j;
+
+        current_priority = highest_priority_match(packet, sw);
+
+        if (current_priority &gt; 0){  /* there's a match */
+            for(j = 0;  j &lt; ftLength; j++){
+                if(flow_table[sw][j].prio == current_priority &amp;&amp; matched(packet,flow_table[sw][j])) {
+                    return j;
+				}
+			}
+		}
+	return -1;  //value not found
+}
+
+
+
+
+
+</declaration>
+	<template>
+		<name>undef</name>
+		<declaration>void undefine_queues(){
+    int i;
+       for(i = 0; i &lt; pqLength * switches; i++){
+            undefine_packet(PACKET_IN_queue[i]);
+       }
+        for(sw : SW){
+            for(i = 0; i &lt; pqLength; i++){
+                undefine_packet(packet_queue[sw][i]);
+            } 
+            for(i = 0; i &lt; pqLength ; i++){
+                undefine_packet(PACKET_OUT_queue[sw][i]);
+            } 
+            for(i = 0; i &lt; cqLength; i++){
+                undefine_rule(control_queue[sw][i]);
+            } 
+            for(i = 0; i &lt; ftLength; i++){
+                undefine_rule(flow_table[sw][i]);
+            } 
+        }
+}
+
+
+/* this method builds packets deterministically.  
+ */
+void packet_builder(){
+    undefine_queues();
+    start_all_clients();
+}
+</declaration>
+		<location id="id0" x="119" y="59">
+		</location>
+		<location id="id1" x="42" y="85">
+			<committed/>
+		</location>
+		<init ref="id1"/>
+		<transition>
+			<source ref="id1"/>
+			<target ref="id0"/>
+			<label kind="assignment" x="17" y="195">packet_builder()</label>
+			<nail x="42" y="153"/>
+			<nail x="132" y="89"/>
+		</transition>
+	</template>
+	<template>
+		<name>pqSw</name>
+		<parameter>const SW sw</parameter>
+		<declaration>
+
+void enqueue_to_pINq(packet_t pkt, SW sw){
+
+    packet_t new_pkt;
+    new_pkt = pkt;
+    new_pkt.sw = sw;   
+	    if(!same_packet_pinq(pkt) ){
+		    PACKET_IN_queue[buffer_level_pINq()] = new_pkt;
+	    }
+}
+
+
+
+
+void dequeue_pkt_pq(int[0,pqLength-1] i, SW sw){
+int p;
+        if(oo_pq != 1                    
+                                   ){ 
+                            for(p = i; p &lt; pqLength-1; p++){
+                                packet_queue[sw][p] = packet_queue[sw][p+1];
+                            }
+                            for(p = buffer_level_pq(sw); p &lt; pqLength; p++){
+                                undefine_packet(packet_queue[sw][p]);
+                            }
+        }
+}
+
+
+
+void process_unmatched_packets(packet_t pkt, SW sw){
+        if(ctrl_optimisation == 1 and not ctrl_is_visible(pkt, sw) ){
+            controller(pkt, sw);
+        }
+        else{
+                enqueue_to_pINq(pkt, sw);
+        }
+}
+
+
+
+
+
+
+void forward_pkt_pq(packet_t packet, SW A_node ){
+    packet_t new_p;
+    int[4999,5999+clients] node = A_node;
+    C B_node_client;
+    SW B_node_switch;
+    port_t out_port;
+    new_p = packet;
+    out_port = flow_table[A_node][rule_index_best_match(new_p, A_node)].out_port;
+
+    new_p.reached[node] = true;
+
+    if(out_port != discard){
+        conn(node, out_port ); 
+
+        if(node_is_client(node)){ /* node == client */
+                B_node_client = node;
+           //     client_packet_received(new_p, B_node_client);
+        }
+        else if(node_is_switch(node)){ /* node is switch */
+                           B_node_switch = node;
+ 						   new_p.sw = B_node_switch;
+ 						   new_p.in_port = out_port;
+                           addpkt(new_p,B_node_switch);
+        }
+        else if(node == misconnection) {  /* Packet loss due to misconnection (the conn-function didn't find entry)  */
+
+        }
+    }
+}
+
+
+
+
+
+void fwd_pkt_pq(int[0,pqLength-1] p, SW sw ){
+
+
+        forward_pkt_pq(packet_queue[sw][p], sw );
+    
+}
+
+
+
+
+</declaration>
+		<location id="id2" x="0" y="0">
+		</location>
+		<init ref="id2"/>
+		<transition>
+			<source ref="id2"/>
+			<target ref="id2"/>
+			<label kind="select" x="-161" y="42">p:int[0,pqLength-1]</label>
+			<label kind="guard" x="-255" y="76">buffer_level_pq(sw) &gt; 0 &amp;&amp;
+p &lt; buffer_level_pq(sw) &amp;&amp;
+!there_is_a_match_in_ft(packet_queue[sw][p], sw)</label>
+			<label kind="assignment" x="-246" y="153">process_unmatched_packets(packet_queue[sw][p], sw),
+dequeue_pkt_pq(p, sw)</label>
+			<label kind="comments" x="34" y="68">TABLE-MISS</label>
+			<nail x="-25" y="68"/>
+			<nail x="17" y="102"/>
+		</transition>
+		<transition>
+			<source ref="id2"/>
+			<target ref="id2"/>
+			<label kind="select" x="-221" y="-161">p:int[0,pqLength-1]</label>
+			<label kind="guard" x="-204" y="-127">buffer_level_pq(sw) &gt; 0 &amp;&amp;
+p &lt; buffer_level_pq(sw) &amp;&amp;
+there_is_a_match_in_ft(packet_queue[sw][p], sw)</label>
+			<label kind="assignment" x="-178" y="-59">fwd_pkt_pq(p, sw),
+dequeue_pkt_pq(p, sw)</label>
+			<label kind="comments" x="51" y="-68">MATCH</label>
+			<nail x="0" y="-68"/>
+			<nail x="42" y="-68"/>
+		</transition>
+	</template>
+	<template>
+		<name>pIq</name>
+		<declaration>
+
+
+void dequeue_pINq(int[0,pqLength * switches -1] p){   
+int i,j;
+        if(oo_pIOq != 1){
+    	
+ 	        for(j = p; j &lt; buffer_level_pINq(); j++){           
+                PACKET_IN_queue[j] = PACKET_IN_queue[j+1];
+            }
+            for(j = buffer_level_pINq(); j &lt; pqLength; j++){
+                    undefine_packet(PACKET_IN_queue[j]);
+            }
+        }	
+}
+</declaration>
+		<location id="id3" x="-51" y="-68">
+		</location>
+		<init ref="id3"/>
+		<transition>
+			<source ref="id3"/>
+			<target ref="id3"/>
+			<label kind="select" x="-365" y="-221">p:int[0,pqLength * switches -1]</label>
+			<label kind="guard" x="-365" y="-161">buffer_level_pINq() &gt; 0 &amp;&amp;
+p &lt; buffer_level_pINq()</label>
+			<label kind="assignment" x="-399" y="-102">controller(PACKET_IN_queue[p],  normalise_sw(PACKET_IN_queue[p].sw)),
+dequeue_pINq(p)</label>
+			<nail x="-281" y="-34"/>
+			<nail x="-281" y="-68"/>
+		</transition>
+	</template>
+	<template>
+		<name>pOq</name>
+		<parameter>const SW sw</parameter>
+		<declaration>void dequeue_pOUTq(SW sw){  
+int i,j;
+        if(!oo_pIOq){
+		               
+ 	        for(j = 0; j &lt; buffer_level_pOUTq(sw); j++){           
+                PACKET_OUT_queue[sw][j] = PACKET_OUT_queue[sw][j+1];
+            }
+          //  pOUT_bufferlevel[sw]--;
+
+            for(j = buffer_level_pOUTq(sw); j &lt; pqLength; j++){
+                    undefine_packet(PACKET_OUT_queue[sw][j]);
+            }
+        }
+}
+
+
+
+void dequeue_pkt_pOq(int[0,pqLength-1] i, SW sw){
+int p;
+        if(oo_pIOq != 1 ){ // if infinite abstraction id turned off
+                            for(p = i; p &lt; pqLength-1; p++){
+                                PACKET_OUT_queue[sw][p] = PACKET_OUT_queue[sw][p+1];
+                            }
+                            for(p = buffer_level_pOUTq(sw); p &lt; pqLength; p++){
+                                undefine_packet(PACKET_OUT_queue[sw][p]);
+                            }
+        }
+}
+
+
+void dequeue_pk_pOq(packet_t packet, SW sw ){
+int i = 0;
+    if(oo_pIOq != 1 ){ // if infinite abstraction id turned off
+        while (i &lt; buffer_level_pOUTq(sw) and  PACKET_OUT_queue[sw][i] != packet ) 
+        {
+                        i++;
+        }
+        dequeue_pkt_pOq(i, sw);
+    }
+}
+
+
+
+
+
+
+
+
+
+
+</declaration>
+		<location id="id4" x="348" y="195">
+		</location>
+		<init ref="id4"/>
+		<transition>
+			<source ref="id4"/>
+			<target ref="id4"/>
+			<label kind="select" x="127" y="153">p:int[0,pqLength-1]</label>
+			<label kind="guard" x="85" y="178">buffer_level_pOUTq(sw) &gt; 0 &amp;&amp;
+p &lt; buffer_level_pOUTq(sw)</label>
+			<label kind="assignment" x="25" y="289">forward(PACKET_OUT_queue[sw][p],  PACKET_OUT_queue[sw][p].out_port, sw ),
+dequeue_pk_pOq(PACKET_OUT_queue[sw][p], sw )</label>
+			<nail x="289" y="195"/>
+			<nail x="289" y="280"/>
+		</transition>
+	</template>
+	<template>
+		<name>cq</name>
+		<parameter>const SW sw</parameter>
+		<declaration>void dequeue_rule_from_cq(int[0,cqLength-1] rule_i, SW sw){
+int i,j;
+    
+    if(buffer_level_cq(sw) &gt; 0){
+                                   
+          undefine_rule(control_queue[sw][rule_i]);          
+    } 
+} 
+
+
+
+/*
+ * Since ordering in the ft is not important, in order to keep only one ordering in the ft, 
+ * the rules are installed not at the end slot but following the order in controller.
+ */
+void enqueue_rule_to_ft(int[0,cqLength-1] r, SW sw){
+int i,j;
+rule_t rule;
+rule = control_queue[sw][r];
+
+          if (forall(i : int[0,ftLength-1]) 
+                        (!same_rules(flow_table[sw][i],rule)  ) ){ 
+                                    /* start flow entry removal timer */
+                           /*         if(rule.hard_timeout &gt; 0 ){
+                                        hard_timeout_c[sw][rule.rule_id] = 0;
+                                    }
+                                    if(rule.idle_timeout &gt; 0 ){
+                                        idle_timeout_c[sw][rule.rule_id] = 0;
+                                    }
+                            */
+                                    /* if this is the very first time (switch) the rule is installed (at).. */
+                                   // if(rule.consist &amp;&amp;  not this_rule_already_installed_somewhere(rule)){ 
+                                   //     consistent_c[rule.rule_id] = 0;
+                                   // }
+                            flow_table[sw][free_slot_ft(sw)] = rule;  /* add to the first empty */                            
+          }
+}
+
+
+void dequeue_rule_from_ft(rule_t rule, SW sw){
+int i = 0;
+int j;
+
+    while(i &lt; ftLength and not same_rules(flow_table[sw][i],rule)  ){
+        i++;
+    }
+        if(i &lt; ftLength){
+            //  hard_timeout_c[sw][rule.rule_id] = 0;
+            //  idle_timeout_c[sw][rule.rule_id] = 0;
+
+                  undefine_rule(flow_table[sw][i]);             
+        }
+}</declaration>
+		<location id="id5" x="63" y="90">
+			<label kind="comments" x="-263" y="51">Α switch is allowed to arbitrarily reorder
+processing of control-plane messages;
+Here we process them nondeterministically.</label>
+		</location>
+		<init ref="id5"/>
+		<transition>
+			<source ref="id5"/>
+			<target ref="id5"/>
+			<label kind="select" x="101" y="153">r : int[0,cqLength-1]</label>
+			<label kind="guard" x="93" y="170">(control_queue[sw][r].prio != undefined) &amp;&amp; 
+(control_queue[sw][r].prio != 0) &amp;&amp;
+control_queue[sw][r].install</label>
+			<label kind="assignment" x="93" y="246">enqueue_rule_to_ft(r, sw),
+dequeue_rule_from_cq(r, sw)</label>
+			<label kind="comments" x="178" y="127">INSTALL RULE</label>
+			<nail x="170" y="144"/>
+			<nail x="114" y="141"/>
+		</transition>
+		<transition>
+			<source ref="id5"/>
+			<target ref="id5"/>
+			<label kind="select" x="46" y="-139">r : int[0,cqLength-1]</label>
+			<label kind="guard" x="76" y="-119">(control_queue[sw][r].prio != undefined) &amp;&amp; 
+(control_queue[sw][r].prio != 0) &amp;&amp;
+!control_queue[sw][r].install &amp;&amp;
+exists(i: int [0,ftLength-1]) same_rules(flow_table[sw][i], control_queue[sw][r])</label>
+			<label kind="assignment" x="85" y="-17">dequeue_rule_from_ft(control_queue[sw][r], sw),
+dequeue_rule_from_cq(r, sw)</label>
+			<label kind="comments" x="178" y="34">UNINSTALL RULE</label>
+			<nail x="170" y="34"/>
+			<nail x="119" y="34"/>
+		</transition>
+	</template>
+	<system>system undef, pqSw, pIq, pOq, cq;
+
+//system test;</system>
+	<queries>
+		<query>
+			<formula>E&lt;&gt; packet_queue[5000][1].defined
+			</formula>
+			<comment>
+			</comment>
+		</query>
+		<query>
+			<formula>E&lt;&gt; invariant_failed
+			</formula>
+			<comment>
+			</comment>
+		</query>
+		<query>
+			<formula>simulate 10 [&lt;=300] {invariant_failed}
+			</formula>
+			<comment>
+			</comment>
+		</query>
+		<query>
+			<formula>Pr[&lt;=100](&lt;&gt; !invariant_failed) &gt;= Pr[&lt;=100](&lt;&gt; invariant_failed)
+			</formula>
+			<comment>
+			</comment>
+		</query>
+		<query>
+			<formula>simulate 1 [&lt;=200] { x, sin(x) }
+			</formula>
+			<comment>
+			</comment>
+		</query>
+		<query>
+			<formula>Pr[&lt;=1000](&lt;&gt; not invariant_failed)
+			</formula>
+			<comment>
+			</comment>
+		</query>
+		<query>
+			<formula>Pr[&lt;=100](&lt;&gt; invariant_failed)
+			</formula>
+			<comment>
+			</comment>
+		</query>
+		<query>
+			<formula>Pr[&lt;=10](&lt;&gt; invariant_failed)
+			</formula>
+			<comment>
+			</comment>
+		</query>
+		<query>
+			<formula>Pr[&lt;=100](&lt;&gt; invariant_failed) &gt;= 0.1
+			</formula>
+			<comment>
+			</comment>
+		</query>
+		<query>
+			<formula>A[] now&gt;=600 imply (Belt.end &amp;&amp; Jobber1.begin &amp;&amp; Jobber2.begin)
+			</formula>
+			<comment>After 600 time units every rule should be in or out at all switches.
+			</comment>
+		</query>
+		<query>
+			<formula>A[] c_r[1] &lt; 10
+			</formula>
+			<comment>
+			</comment>
+		</query>
+		<query>
+			<formula>Pr[&lt;=100] (&lt;&gt; c_r[1] &gt;10)
+			</formula>
+			<comment>
+			</comment>
+		</query>
+		<query>
+			<formula>E&lt;&gt; c_r[1] &gt; 1000
+			</formula>
+			<comment>
+			</comment>
+		</query>
+		<query>
+			<formula>Pr[&lt;=100](&lt;&gt; exists (sw: SW)   exists (i: int [0,ftLength-1])  flow_table[sw][i].consist &amp;&amp; consistent_c[flow_table[sw][i].rule_id]&gt;=1 &amp;&amp; !this_rule_installed_everywhere(flow_table[sw][i])     &amp;&amp;      (pqswbufferlevel[sw] &gt; 0 || pIN_bufferlevel &gt; 0 || pOUT_bufferlevel[sw] &gt; 0)   )
+			</formula>
+			<comment>
+			</comment>
+		</query>
+		<query>
+			<formula>A[] not deadlock
+			</formula>
+			<comment>
+			</comment>
+		</query>
+		<query>
+			<formula>Pr[&lt;=100]  (&lt;&gt; exists (sw: SW)   exists (i: int [0,ftLength-1])    flow_table[sw][i].consist    &amp;&amp;    consistent_c[flow_table[sw][i].rule_id]&gt;=10     &amp;&amp;   !this_rule_installed_everywhere(flow_table[sw][i]))
+			</formula>
+			<comment>
+			</comment>
+		</query>
+		<query>
+			<formula>E&lt;&gt;            exists (i: int [0,ftLength-1]) exists (sw: SW)      flow_table[sw][i].consist    &amp;&amp;    consistent_c[flow_table[sw][i].rule_id]&gt;=10     &amp;&amp;   !this_rule_installed_everywhere(flow_table[sw][i])
+			</formula>
+			<comment>Exists some rule (of interest) at some flow table that, 10 time units after it has been installed at the 1st router, still not installed everywhere.
+			</comment>
+		</query>
+		<query>
+			<formula>A[] forall (sw: SW) forall (i: int [0,ftLength-1]) flow_table[sw][i].consist &amp;&amp; consistent_c[flow_table[sw][i].rule_id]&gt;=10 &amp;&amp; this_rule_installed_everywhere(flow_table[sw][i])
+			</formula>
+			<comment>10 time units after the rule(s) of interest is(are) installed at the first switch, it should have been installed everywhere.
+			</comment>
+		</query>
+		<query>
+			<formula>A[] forall (s: SW) forall (p: int[0,pqLength-1]) not packet_queue[s][p].reached[s]
+			</formula>
+			<comment>
+			</comment>
+		</query>
+	</queries>
+</nta>
