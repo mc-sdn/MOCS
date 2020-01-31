@@ -16,7 +16,7 @@ The xml input files are also named conventionally and they are organised by (1) 
 - `Bugs`<br/>
 In Bugs-folder there are three controller programs in buggy and corrected versions (for the `Consistent updates` one we provide only the bug-free version as the buggy one can directly obtained by blocking the barrier-reply messages). The topologies for all the examples in `Bugs` are 2-switches-2-hosts from `Dataplane topologies/ML-StatelessFW.pdf`. For more details see []. 
 - `Dataplane topologies`<br/>
-The network setups used to evaluate MOCS for the MAC learning and stateless firewall applications are depicted in `ML-StatelessFW.pdf`. For the stateful firewall in `StatefulFW.pdf`.
+All the network setups used to evaluate MOCS for the MAC learning and stateless firewall applications are depicted in `ML-StatelessFW.pdf`. For the stateful firewall in `StatefulFW.pdf`.
 
 In every leaf-subdirectory there is a query file (por.q) which contains the property.
 
