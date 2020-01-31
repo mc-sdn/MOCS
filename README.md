@@ -12,7 +12,7 @@ These instructions will guide you through getting the MOCS underway.
 
 ### Running the model checking
 
-Use the command line version of the verifier: `verifyta`. It takes as input an instantiation of the SDN transition system (an xml file) and an invariant property (file por.q).<br/>
+Use the command line version of the verifier: `verifyta`. It takes as input an instantiation of the SDN transition system, i.e. a dataplane topology and a controller program, (xml file) and an invariant property (file por.q).<br/>
 The network setups (data plane instantiations) used to evaluate MOCS are depicted in topo1.pdf for the MAC learning application and topo2.pdf for the stateful firewall. The topology setups for the stateless firewall follow the pattern of those with two switches in topo1.pdf.
 
 ### Example
