@@ -14,7 +14,7 @@ File naming convention:<br/>
 The xml input files are also named conventionally and they are organised by (1) controller program name (same format as their immediate parent directory), and (2) topology setup (data plane instantiations), where mn denotes a network of m switches and n hosts as shown in the topo1.pdf, topo2.pdf files.
 
 - `Bugs`<br/>
-In Bugs-folder there are three controller programs in buggy and corrected versions (for the `Consisten updates` one we provide only the bug-free version as the buggy one can directly obtained by blocking the barrier-reply messages). For more details see []. 
+In Bugs-folder there are three controller programs in buggy and corrected versions (for the `Consistent updates` one we provide only the bug-free version as the buggy one can directly obtained by blocking the barrier-reply messages). For more details see []. 
 - `Dataplane topologies`<br/>
 The network setups used to evaluate MOCS for the MAC learning and stateless firewall applications are depicted in `ML-StatelessFW.pdf`. For the stateful firewall in `StatefulFW.pdf`.
 
