@@ -14,7 +14,7 @@ File naming convention:<br/>
 The xml input files are also named conventionally and they are organised by (1) controller program name (same format as their immediate parent directory), and (2) topology setup (data plane instantiations), where mn denotes a network of m switches and n hosts as shown in the topo1.pdf, topo2.pdf files.
 
 - `Bugs`<br/>
-- `Dataplane` topologies<br/>
+- `Dataplane topologies`<br/>
 The network setups used to evaluate MOCS for the MAC learning and stateless firewall applications are depicted in topo1.pdf. For the stateful firewall in topo2.pdf.
 
 In every leaf-subdirectory there is a query file (por.q) which contains the property.
