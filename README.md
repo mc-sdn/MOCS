@@ -6,14 +6,14 @@ A prototype implementation of a highly expressive, optimised Software-Defined Ne
 
 These instructions will guide you through getting the MOCS underway.
 
-Each folder contains data from a specific controller program as named.<br/>
+Each folder contains data related to a specific controller program as named.<br/>
 
 Subfolder naming convention:<br/>
 The subfolders are named conventionally in order to provide a preview of the content. They are organised by (1) controller program name (ML for MAC-learning witch, FW for stateful firewall and SSH for stateless firewall), and (2) whether the optimisations are on/off: "wBit"/"woBit" stands for with/without efficient state representation, and "wPOR"/"woPOR" for with/without partial-order reduction. 
 
 File naming convention:<br/>
 The xml input files are also named conventionally and they are organised by (1) controller program name (same format as their immediate parent directory), and (2) topology setup (where mn denotes a network of m switches and n hosts as shown in the topo1.pdf, topo2.pdf files).<br/>
-In every subfolder there is a query file por.q which contains the property.
+In every subfolder there is a query file (por.q) which contains the property.
 
 ### Prerequisites
 
@@ -28,7 +28,7 @@ The network setups (data plane instantiations) used to evaluate MOCS are depicte
 
 ### Example
 
-In the example below, we verify the loop-freedom property: "*a packet should never come back to the same switch*" for the MAC learning application in a 3-switches-3-hosts acyclic topology (see topologies.pdf). Formally, see line 19 in por.q.
+In the example below, we verify the loop-freedom property: "*a packet should never come back to the same switch*" for the MAC learning application in a 3-switches-3-hosts acyclic topology (see topo1.pdf). Formally, see line 19 in por.q.
  
 ```sh
 ./verifyta -d -S1 -u  ML33.xml por.q
