@@ -11,7 +11,7 @@ Each subfolder in `Scaling up` contains data related to a specific controller pr
 Leaf-subfolder naming convention:<br/>
 The end-subfolders are named conventionally in order to provide a preview of the content. They are organised by (1) controller program name (ML for MAC-learning witch, FW for stateful firewall and SSH for stateless firewall), and (2) whether the optimisations are on/off: "wBit"/"woBit" stands for with/without efficient state representation, and "wPOR"/"woPOR" for with/without partial-order reduction.<br/> 
 File naming convention:<br/>
-The xml input files are also named conventionally and they are organised by (1) controller program name (same format as their immediate parent directory), and (2) topology setup (data plane instantiations), where mn denotes a network of m switches and n hosts as shown in the topo1.pdf, topo2.pdf files.
+The xml input files are also named conventionally and they are organised by (1) controller program name (same format as their immediate parent directory), and (2) topology setup (data plane instantiations), where mn denotes a network of m switches and n hosts as shown in the `Dataplane topologies` files.
 
 - `Bugs`<br/>
 In Bugs-folder there are three controller programs in buggy and corrected versions (for the `Consistent updates` one we provide only the bug-free version as the buggy one can directly obtained by blocking the barrier-reply messages). The topologies for all the examples in `Bugs` are 2-switches-2-hosts from `Dataplane topologies/ML-StatelessFW.pdf`. For more details see []. 
