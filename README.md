@@ -15,7 +15,7 @@ The xml input files are also named conventionally and they are organised by (1) 
 
 - `Bugs`<br/>
 - `Dataplane topologies`<br/>
-The network setups used to evaluate MOCS for the MAC learning and stateless firewall applications are depicted in topo1.pdf. For the stateful firewall in topo2.pdf.
+The network setups used to evaluate MOCS for the MAC learning and stateless firewall applications are depicted in `ML-StatelessFW.pdf`. For the stateful firewall in `StatefulFW.pdf`.
 
 In every leaf-subdirectory there is a query file (por.q) which contains the property.
 
