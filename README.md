@@ -6,7 +6,7 @@ A prototype implementation of a highly expressive, optimised Software-Defined Ne
 
 These instructions will guide you through getting the MOCS underway.
 
-- `Scaling up`<br/>
+* `Scaling up`<br/>
 Each subfolder in `Scaling up` contains data related to a specific controller program as named.<br/>
 Leaf-subfolder naming convention:<br/>
 The end-subfolders are named conventionally in order to provide a preview of the content. They are organised by (1) controller program name (ML for MAC-learning witch, FW for stateful firewall and SSH for stateless firewall), and (2) whether the optimisations are on/off: "wBit"/"woBit" stands for with/without efficient state representation, and "wPOR"/"woPOR" for with/without partial-order reduction.<br/> 
