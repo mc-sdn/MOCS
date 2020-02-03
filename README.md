@@ -14,7 +14,7 @@ The end-subfolders are named conventionally in order to provide a preview of the
 The xml input files are also named conventionally and they are organised by (1) controller program name (same format as their immediate parent directory), and (2) topology setup (data plane instances), where mn denotes a network of m switches and n hosts as shown in the `Dataplane topologies` files.
 
 - `Bugs`<br/>
-In Bugs-folder there are three controller programs in buggy and corrected versions, apart from the `Consistent updates` for which we provide only the bug-free version as the buggy one can directly be obtained by blocking the barrier-reply messages. The topologies for all the examples in `Bugs` are 2-switches-2-hosts from `Dataplane topologies/ML-StatelessFW.pdf`. For more details see []. 
+In Bugs-folder three controller programs, both buggy and correct versions, are provided apart from the `Consistent updates` for which we provide only the bug-free version as the buggy one can directly be obtained by blocking the barrier-reply messages. The topologies for all the examples in `Bugs` are 2-switches-2-hosts from `Dataplane topologies/ML-StatelessFW.pdf`. For more details see []. 
 - `Dataplane topologies`<br/>
 All the network setups (data plane instancens) used to evaluate MOCS for the MAC learning and stateless firewall applications are depicted in `ML-StatelessFW.pdf`. For the stateful firewall in `StatefulFW.pdf`.
 
