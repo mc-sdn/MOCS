@@ -32,7 +32,7 @@ Use the command line version of the verifier: `verifyta`. It takes as input (1) 
 
 ### Example
 
-In the example below, we verify the loop-freedom invariant property: "*a packet should never come back to the same switch*" for the MAC learning application in a 3-switches-3-hosts acyclic topology (see `Dataplane topologies/ML-StatelessFW.pdf`). Formally, the invariant is shown in line 19 of por.q.
+In the example below, we verify the loop-freedom invariant property: "*a packet should never come back to the same switch*" for the MAC learning application in a 3-switches-3-hosts acyclic topology (see `Dataplane topologies/ML-StatelessFW.pdf`). The invariant is read from line 19 of por.q.
  
 ```sh
 ./verifyta -d -S1 -u  ML33.xml por.q
