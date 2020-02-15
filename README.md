@@ -28,7 +28,7 @@ In every leaf-subdirectory there is a query file (**`por.q`**) which contains th
 
 ### Running the model checking
 
-Use the command line version of the verifier: `verifyta`. It takes as input (1) an instantiation of the SDN transition system, i.e. a dataplane topology and a controller program (xml file) and (2) an invariant property (file **`por.q`**).<br/>
+Use the command line version of the verifier: `verifyta`. It takes as input (1) an instantiation of the SDN transition system, i.e. a dataplane topology and a controller program (xml file) and (2) an invariant property (q-file).<br/>
 
 
 ### Example
