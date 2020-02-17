@@ -12,14 +12,14 @@
             send rule2 to all switches, and a barrier to the switch of server only
    ** If the pk is already in the CP, then do nothing (which means that only one barrier per rule_server (per server) will be out at a time.
 
- ****** one barrier per server **** barrier_id = [1,servers] *** for servers will keep the hosts from the end, i.e., last_host, last_host-1,...
- ****** to easy encoding the xid-server mapping is: xid for server serv = last_host-serv+1 (xid=1 is the last server, ...)
+ ****** one barrier per server **** barrier_id = [1,servers] *** for servers the hosts from the end (of range H) are reserved, i.e., last_host, last_host-1,...
+ ****** to easy encoding the xid-server mapping is: xid for server serv = last_host-serv+1 (xid=1 corresponds to the last server in Hosts, ...)
 
- * ctrl is safe : even if we have
- * two packets with dest=server in rq the ctrl-actions are independent as leading to same saate.
+ * ctrl is safe even if we have
+ * two packets with dest=server in rq: the ctrl-actions are independent as leading to same state.
 
-%%%% packets creted with fields for all in_port, with and without dest=server. In the initial state,
-only packets with in_port = port_of client, are added to the pq of the clients' switches.
+%%%% Packets are built with (1) field-values for all in_port, and (2) with and without dest=server. In the initial state,
+     the packets with in_port = port_of client, are added to the pq of the clients' switches.
 
  ***destIP=server and 0(means any other)*** and ***inc_port=1*** and load them to the client's switch only: 
 ---so 2 packets for the case c-swA-swB-s
@@ -48,8 +48,9 @@ rules: rule2: inc_port=wildcard,                 out_port=discard,  prio=1, --- 
                     this implies that it is not in the gV
  */
 
-/*  cd /Volumes/LocalDataHD/v/vk/vk207/Box/uppaal/Kuai\ experiments/SSH\ bitvector 
- *  /Volumes/LocalDataHD/v/vk/vk207/Box/uppaal/sdn/verifyta -d -S2 -u  FW_1x2__.xml por.q
+/*  to run the command line version of the verifier: verifyta:
+    cd &lt;the path where the xml is located&gt; 
+ *  /Volumes/LocalDataHD/v/vk/vk207/Box/uppaal/sdn/verifyta -d -S2 -u  model.xml specs.q
  */
 
 
@@ -59,7 +60,7 @@ rules: rule2: inc_port=wildcard,                 out_port=discard,  prio=1, --- 
 //const int Bound = 1;
 //const int multiplicity =  1;
 const int switches     =  2;
-const int hosts      =  2;
+const int hosts        =  2;
 const int ports        =  2;  /* the max number of ports a switch in the topology in question might have */
 
 
@@ -318,13 +319,13 @@ const int last_host   = 5999 + hosts;
 const int server_1 = last_host;
 const int server_switches = 1;
 
-urgent chan hasten;
+//urgent chan hasten;
 
-int barriers_out[SW][bar]; // this table stores the order of the barriers.  
-                            // We can't rely on the id of the barriers for the ordering
-                            // because can't know when each barrier will be sent by the CP.
-                            // All barriers are predefined in the CP and in the barrierIn. 
-
+int barriers_out[SW][bar];  /* this table stores the order of the barriers.  
+                             * We can't rely on the id of the barriers for the ordering
+                             * because can't know when each barrier will be sent by the CP.
+                             * All barriers are predefined in the CP and in the barrierIn. 
+                             */
 
 
 //const int32_t invariant_changed = 1 &lt;&lt; 31;
@@ -1579,6 +1580,7 @@ void process_unmatched_packets_32(pkts p, SW sw){
 
 
 void forward_matched_pkt_32(pkts p, SW A_node ){
+    int i = 1;
     int32_t new_p;
     mis_SW_H node = A_node;
     H B_node_client;
@@ -1598,7 +1600,11 @@ void forward_matched_pkt_32(pkts p, SW A_node ){
         else if(node_is_switch(node)){ /* node is switch */
                            B_node_switch = node;
                            encode_bitfield(_in_port_, __out_port, new_p);
-                           addpkt_32(new_p,B_node_switch);
+                            // look up for the packet with in_port as returned from lambda
+                            while(  (i &lt;= packets_no) and ( (new_p&amp;mask_same_pkt) != (P[i]&amp;mask_same_pkt)) ){
+                                i++;
+                            }
+                            set_bit(  P[i], from_bit(_pb_)+B_node_switch-first_switch  );                          
         }
         else if(node == misconnection) {  /* Packet loss due to misconnection (the conn-function didn't find entry)  */
 
@@ -1780,34 +1786,22 @@ remove_rule_from_cq_32(r, sw)</label>
 	</template>
 	<template>
 		<name>bsync</name>
-		<location id="id6" x="0" y="102">
-			<committed/>
+		<location id="id6" x="0" y="0">
 		</location>
-		<location id="id7" x="0" y="0">
-		</location>
-		<init ref="id7"/>
-		<transition>
-			<source ref="id7"/>
-			<target ref="id6"/>
-			<label kind="guard" x="-178" y="25">exists(sw:SW) exists(b:bar)
-brq[sw][b]</label>
-			<label kind="synchronisation" x="-85" y="0">hasten?</label>
-		</transition>
+		<init ref="id6"/>
 		<transition>
 			<source ref="id6"/>
-			<target ref="id7"/>
+			<target ref="id6"/>
 			<label kind="select" x="127" y="17">sw:SW,
 b:bar</label>
 			<label kind="guard" x="127" y="51">brq[sw][b]</label>
 			<label kind="assignment" x="127" y="68">barrierIn(sw,b)</label>
-			<label kind="comments" x="17" y="-170">the guard here: forall sw exists b in bar s.t. brq[sw][b]
-
-bsync is forced to take barrierIn once
-the guards are satisfied</label>
+			<label kind="comments" x="68" y="-17">the guard here: forall sw exists b in bar s.t. brq[sw][b]</label>
 			<nail x="102" y="51"/>
+			<nail x="25" y="59"/>
 		</transition>
 	</template>
-	<system>system undef, pqSw, pIq, pOq, cq;
+	<system>system undef, pqSw, pIq, pOq, cq, bsync;
 
 //system test;</system>
 	<queries>
